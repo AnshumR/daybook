@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f3f5f2;
+  --card: #ffffff;
+  --ink: #18221e;
+  --muted: #5d6b65;
+  --line: #dce3de;
+  --accent: #1e6b57;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3efe9;
+  --high: #b4441f;
+  --high-soft: #f6e4dc;
+  --medium: #9a6a08;
+  --medium-soft: #f5ecd6;
+  --low: #5d6b65;
+  --low-soft: #e9eeeb;
+  --heat-0: #e6ebe7;
+  --heat-1: #c9e0d5;
+  --heat-2: #8fc2ab;
+  --heat-3: #4e9a7d;
+  --heat-4: #1e6b57;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1513;
+    --card: #18201d;
+    --ink: #e7ede9;
+    --muted: #97a59f;
+    --line: #2b3632;
+    --accent: #4fb592;
+    --accent-ink: #0b1411;
+    --accent-soft: #1d3a31;
+    --high: #e5835f;
+    --high-soft: #3a2219;
+    --medium: #d9a641;
+    --medium-soft: #352a12;
+    --low: #97a59f;
+    --low-soft: #242d2a;
+    --heat-0: #222b28;
+    --heat-1: #1f4337;
+    --heat-2: #24654f;
+    --heat-3: #34896c;
+    --heat-4: #4fb592;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-high: var(--high);
+  --color-high-soft: var(--high-soft);
+  --color-medium: var(--medium);
+  --color-medium-soft: var(--medium-soft);
+  --color-low: var(--low);
+  --color-low-soft: var(--low-soft);
+  --color-heat-0: var(--heat-0);
+  --color-heat-1: var(--heat-1);
+  --color-heat-2: var(--heat-2);
+  --color-heat-3: var(--heat-3);
+  --color-heat-4: var(--heat-4);
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/* Notebook rule lines on the notes boxes */
+.ruled {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(1.75rem - 1px),
+    var(--line) calc(1.75rem - 1px),
+    var(--line) 1.75rem
+  );
+  background-attachment: local;
+  line-height: 1.75rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
