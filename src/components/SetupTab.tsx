@@ -5,9 +5,9 @@ import { getStore, useData } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { todayISO } from "@/lib/dates";
 import { shortId } from "@/lib/ids";
-import { dayStats, wordEnabled } from "@/lib/score";
+import { dayStats, wordEnabled, wordLevel } from "@/lib/score";
 import { DEFAULT_MODE, DEFAULT_THEME, isMode, isThemeId, THEME_IDS, THEMES, type Mode } from "@/lib/themes";
-import { wordForDate } from "@/lib/words";
+import { WORD_LEVELS, wordForDate } from "@/lib/words";
 import { formatClock, plannedAt } from "@/lib/insights";
 import { PRIORITY_LABEL, TIMEFRAME_LABEL, type Item, type Task } from "@/lib/types";
 import { Card, IconButton, Icons, InlineText } from "./ui";
@@ -161,7 +161,7 @@ function ExportCard() {
         s.tasksDone,
         s.tasksTotal,
         s.score,
-        s.wordCounts ? wordForDate(d).word : "",
+        s.wordCounts ? wordForDate(d, wordLevel(settings)).word : "",
         day?.word_sentence ?? "",
         day?.went_well ?? "",
         day?.improve ?? "",
@@ -365,6 +365,7 @@ function FeaturesCard() {
   const data = useData();
   const store = getStore();
   const wordOn = wordEnabled(data.settings);
+  const level = wordLevel(data.settings);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
 
   useEffect(() => {
@@ -394,6 +395,27 @@ function FeaturesCard() {
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-card shadow transition-all ${wordOn ? "left-6" : "left-1"}`} />
         </button>
       </div>
+      {wordOn && (
+        <div className="flex items-center justify-between gap-3 border-b border-line py-3">
+          <div>
+            <p className="font-bold">Word level</p>
+            <p className="text-sm text-muted">Advanced is CAT, GRE and IELTS level. Everyday is simpler.</p>
+          </div>
+          <div className="flex shrink-0 overflow-hidden rounded-full border border-line">
+            {WORD_LEVELS.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => store.updatePrefs({ wordLevel: l.id })}
+                aria-pressed={level === l.id}
+                className={`px-3 py-1.5 text-sm font-bold ${level === l.id ? "bg-accent text-accent-ink" : "text-muted"}`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="pt-3">
         <p className="font-bold">Reminders</p>
         <p className="text-sm text-muted">

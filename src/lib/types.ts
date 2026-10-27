@@ -7,6 +7,8 @@ export type Prefs = {
   focus?: string | null;
   /** Show the English word of the day (default on). */
   wordOfDay?: boolean;
+  /** "advanced" (default) or "everyday". */
+  wordLevel?: string;
 };
 
 export type Settings = {

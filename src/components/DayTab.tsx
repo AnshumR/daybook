@@ -7,7 +7,7 @@ import { currentStreak, useTasksByDate } from "@/lib/derive";
 import { describePlanned, formatMinutes, plannedAt } from "@/lib/insights";
 import { overdueTasks } from "@/lib/reminders";
 import { dayReport } from "@/lib/report";
-import { dayStats, wordDoneOn, wordEnabled } from "@/lib/score";
+import { dayStats, wordDoneOn, wordEnabled, wordLevel } from "@/lib/score";
 import { partOfDay } from "@/lib/themes";
 import { PRIORITIES, PRIORITY_LABEL, PRIORITY_NAME, PRIORITY_RANK, type Priority, type Task } from "@/lib/types";
 import { containsWord, wordForDate } from "@/lib/words";
@@ -343,7 +343,7 @@ function WordCard({ date }: { date: string }) {
   const data = useData();
   const store = getStore();
   const day = data.days[date];
-  const w = wordForDate(date);
+  const w = wordForDate(date, wordLevel(data.settings));
   const sentence = day?.word_sentence ?? "";
   const learned = wordDoneOn(day, date);
   const typed = sentence.trim().length > 0;

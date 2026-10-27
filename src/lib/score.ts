@@ -1,5 +1,5 @@
 import type { Day, Settings, Task } from "./types";
-import { sentenceUsesWord, wordForDate } from "./words";
+import { isWordLevel, sentenceUsesWord, wordsForDate, type WordLevel } from "./words";
 
 /** Word of the day counts towards the score from the day it was introduced. */
 export const WORD_START = "2026-10-27";
@@ -22,8 +22,13 @@ export function wordEnabled(settings: Settings): boolean {
   return settings.prefs?.wordOfDay !== false;
 }
 
+export function wordLevel(settings: Settings): WordLevel {
+  return isWordLevel(settings.prefs?.wordLevel) ? settings.prefs.wordLevel : "advanced";
+}
+
 export function wordDoneOn(day: Day | undefined, date: string): boolean {
-  return !!day?.word_sentence && sentenceUsesWord(day.word_sentence, wordForDate(date).word);
+  const s = day?.word_sentence;
+  return !!s && wordsForDate(date).some((w) => sentenceUsesWord(s, w.word));
 }
 
 export function dayStats(settings: Settings, day: Day | undefined, tasks: Task[], date?: string): DayStats {

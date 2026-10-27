@@ -1,3 +1,11 @@
+import { ADVANCED_WORDS } from "./words-advanced";
+
+export type WordLevel = "advanced" | "everyday";
+export const WORD_LEVELS: { id: WordLevel; label: string }[] = [
+  { id: "advanced", label: "Advanced" },
+  { id: "everyday", label: "Everyday" },
+];
+
 export type Word = {
   word: string;
   pos: string;
@@ -8,8 +16,8 @@ export type Word = {
   example: string;
 };
 
-// One word per day, rotating through the list.
-export const WORDS: Word[] = [
+// Everyday vocabulary, one per day.
+export const EVERYDAY_WORDS: Word[] = [
   { word: "resilient", pos: "adjective", hindi: "लचीला; मुश्किलों से जल्दी उबरने वाला", meaning: "able to recover quickly from difficulty", example: "She stayed resilient after losing her first job." },
   { word: "diligent", pos: "adjective", hindi: "मेहनती; लगन से काम करने वाला", meaning: "careful and hard-working", example: "A diligent student revises every evening." },
   { word: "candid", pos: "adjective", hindi: "स्पष्टवादी; साफ़-साफ़ कहने वाला", meaning: "honest and direct", example: "Thank you for your candid feedback." },
@@ -103,11 +111,21 @@ export const WORDS: Word[] = [
   { word: "vulnerable", pos: "adjective", hindi: "असुरक्षित; कमज़ोर", meaning: "easily hurt or attacked", example: "Weak passwords leave your account vulnerable." },
 ];
 
-/** Stable word for a given date (YYYY-MM-DD). */
-export function wordForDate(date: string): Word {
+export function isWordLevel(v: unknown): v is WordLevel {
+  return v === "advanced" || v === "everyday";
+}
+
+/** Stable word for a given date (YYYY-MM-DD) at the chosen level. */
+export function wordForDate(date: string, level: WordLevel = "advanced"): Word {
+  const list = level === "everyday" ? EVERYDAY_WORDS : ADVANCED_WORDS;
   const [y, m, d] = date.split("-").map(Number);
   const dayNumber = Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
-  return WORDS[((dayNumber % WORDS.length) + WORDS.length) % WORDS.length];
+  return list[((dayNumber % list.length) + list.length) % list.length];
+}
+
+/** Both levels' words for a date, so switching level never un-ticks a past day. */
+export function wordsForDate(date: string): Word[] {
+  return [wordForDate(date, "advanced"), wordForDate(date, "everyday")];
 }
 
 /** True when the text contains the word or a close form of it (e.g. "resilience"). */

@@ -1,6 +1,6 @@
 import { formatLong } from "./dates";
 import { describePlanned, formatMinutes, plannedAt } from "./insights";
-import { dayStats } from "./score";
+import { dayStats, wordLevel } from "./score";
 import { PRIORITY_LABEL, PRIORITY_RANK, type Day, type Settings, type Task } from "./types";
 import { wordForDate } from "./words";
 
@@ -39,7 +39,7 @@ export function dayReport(settings: Settings, day: Day | undefined, tasks: Task[
   }
 
   if (s.wordCounts) {
-    const w = wordForDate(date);
+    const w = wordForDate(date, wordLevel(settings));
     lines.push("", `WORD OF THE DAY: ${w.word} (${w.hindi})`);
     lines.push(day?.word_sentence?.trim() ? `My sentence: "${day.word_sentence.trim()}"` : "No sentence written.");
   }
