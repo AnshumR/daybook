@@ -17,7 +17,7 @@ export default function MonthTab({ date, navigate }: { date: string; navigate: N
   const dates = monthDates(year, month1);
   const today = todayISO();
 
-  const stats = dates.map((d) => dayStats(data.settings, data.days[d], tasksByDate.get(d) ?? []));
+  const stats = dates.map((d) => dayStats(data.settings, data.days[d], tasksByDate.get(d) ?? [], d));
   const logged = stats.filter((s) => s.logged);
   const avg = average(logged.map((s) => s.score));
   const fullDays = stats.filter((s) => s.logged && s.score === 100).length;

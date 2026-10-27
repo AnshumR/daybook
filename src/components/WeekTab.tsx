@@ -14,7 +14,7 @@ export default function WeekTab({ date, navigate }: { date: string; navigate: Na
   const start = startOfWeek(date);
   const week = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const today = todayISO();
-  const stats = week.map((d) => dayStats(data.settings, data.days[d], tasksByDate.get(d) ?? []));
+  const stats = week.map((d) => dayStats(data.settings, data.days[d], tasksByDate.get(d) ?? [], d));
 
   // 30-day consistency up to the selected day (never past today).
   const end = date > today ? today : date;

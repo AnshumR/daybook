@@ -13,6 +13,8 @@ A personal daily planner and life tracker. Plan the day, tick off your routine, 
 - **Goals**: area, timeframe, target date, days left or overdue, progress in ±10% steps, and a next step with "Plan it today".
 - **Setup**: add, rename, reorder and remove habits, categories and goal areas. Renames keep history because everything is stored by id. CSV exports and account deletion.
 
+**New in this version:** a calmer Day page with a Focus mode per category, tasks that carry over automatically, P1/P2/P3 priorities, 2-hour reminders for P1 or focus tasks, an English word of the day with its Hindi meaning (write a sentence to tick it off), and a theme picker (5 colour themes, light/dark/auto) under Setup.
+
 ## Setup
 
 You need free accounts on [Supabase](https://supabase.com), [Google Cloud](https://console.cloud.google.com) and [Vercel](https://vercel.com).
@@ -32,6 +34,8 @@ You need free accounts on [Supabase](https://supabase.com), [Google Cloud](https
 3. Check **Table Editor**. You should see `settings`, `days`, `tasks`, `goals`, `month_notes` and `year_notes`, all marked **RLS enabled**.
 
 (If you use the Supabase CLI instead: `supabase link --project-ref <ref>` then `supabase db push`.)
+
+> **Updating later:** run every file in `supabase/migrations/` in date order. If you set up before 28 Oct 2026, also run `20261028000000_word_and_prefs.sql` (word of the day + themes). It's safe to run twice.
 
 ### 3. Create a Google OAuth client
 

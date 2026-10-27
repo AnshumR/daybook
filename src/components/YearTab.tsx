@@ -17,7 +17,7 @@ export default function YearTab({ date, navigate }: { date: string; navigate: Na
 
   const months = Array.from({ length: 12 }, (_, i) => {
     const dates = monthDates(year, i + 1);
-    return { month1: i + 1, dates, stats: dates.map((d) => dayStats(data.settings, data.days[d], tasksByDate.get(d) ?? [])) };
+    return { month1: i + 1, dates, stats: dates.map((d) => dayStats(data.settings, data.days[d], tasksByDate.get(d) ?? [], d)) };
   });
   const all = months.flatMap((m) => m.stats);
   const logged = all.filter((s) => s.logged);

@@ -5,7 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "./supabase/client";
 import { DEFAULT_SETTINGS } from "./defaults";
 import { uuid } from "./ids";
-import type { Day, Goal, MonthNote, Priority, Settings, Task, YearNote } from "./types";
+import { todayISO } from "./dates";
+import type { Day, Goal, MonthNote, Prefs, Priority, Settings, Task, YearNote } from "./types";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -77,6 +78,8 @@ class DaybookStore {
     if (typeof window !== "undefined") {
       const flush = () => {
         if (document.visibilityState === "hidden") this.flushDebounced();
+        // Coming back on a new day: bring yesterday's unfinished tasks forward.
+        else this.carryOverToToday();
       };
       document.addEventListener("visibilitychange", flush);
       window.addEventListener("pagehide", () => this.flushDebounced());
@@ -118,7 +121,8 @@ class DaybookStore {
         return;
       }
 
-      const settingsRes = await this.sb.from("settings").select("habits, categories, areas").maybeSingle();
+      // select("*") keeps working before newer columns (prefs, word_sentence) exist.
+      const settingsRes = await this.sb.from("settings").select("*").maybeSingle();
       if (settingsRes.error) throw settingsRes.error;
       let settings: Settings;
       if (settingsRes.data) {
@@ -126,18 +130,27 @@ class DaybookStore {
           habits: settingsRes.data.habits ?? [],
           categories: settingsRes.data.categories ?? [],
           areas: settingsRes.data.areas ?? [],
+          prefs: settingsRes.data.prefs ?? {},
         };
       } else {
         // First visit: give the new user editable starter data.
         settings = DEFAULT_SETTINGS;
         const { error } = await this.sb
           .from("settings")
-          .upsert({ user_id: user.id, ...DEFAULT_SETTINGS }, { onConflict: "user_id", ignoreDuplicates: true });
+          .upsert(
+            {
+              user_id: user.id,
+              habits: DEFAULT_SETTINGS.habits,
+              categories: DEFAULT_SETTINGS.categories,
+              areas: DEFAULT_SETTINGS.areas,
+            },
+            { onConflict: "user_id", ignoreDuplicates: true },
+          );
         if (error) throw error;
       }
 
       const [days, tasks, goals, monthNotes, yearNotes] = await Promise.all([
-        this.fetchAll<Day>("days", "date, habits_done, note", "date"),
+        this.fetchAll<Day>("days", "*", "date"),
         this.fetchAll<Task>("tasks", "id, date, text, category_id, priority, done, moved_count, created_at", "created_at"),
         this.fetchAll<Goal>(
           "goals",
@@ -163,6 +176,7 @@ class DaybookStore {
         },
       };
       this.emit();
+      this.carryOverToToday();
     } catch (e) {
       const message = e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : "Something went wrong";
       this.state = { phase: "error", message };
@@ -250,6 +264,17 @@ class DaybookStore {
     });
   }
 
+  setWordSentence(date: string, sentence: string) {
+    this.patchDay(date, { word_sentence: sentence });
+    const userId = this.data.userId;
+    this.debounce(`word:${date}`, () => {
+      const latest = this.state.phase === "ready" ? (this.state.data.days[date]?.word_sentence ?? "") : sentence;
+      this.save((sb) =>
+        sb.from("days").upsert({ user_id: userId, date, word_sentence: latest }, { onConflict: "user_id,date" }),
+      );
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Tasks
   // ---------------------------------------------------------------------------
@@ -283,6 +308,14 @@ class DaybookStore {
   moveTasks(ids: string[], toDate: string) {
     const tasks = this.data.tasks.filter((t) => ids.includes(t.id));
     for (const t of tasks) this.updateTask(t.id, { date: toDate, moved_count: t.moved_count + 1 });
+  }
+
+  /** Unfinished tasks from earlier days spill over into today automatically. */
+  carryOverToToday() {
+    if (this.state.phase !== "ready") return;
+    const today = todayISO();
+    const stale = this.data.tasks.filter((t) => !t.done && t.date < today).map((t) => t.id);
+    if (stale.length) this.moveTasks(stale, today);
   }
 
   // ---------------------------------------------------------------------------
@@ -349,7 +382,14 @@ class DaybookStore {
   // Settings and account
   // ---------------------------------------------------------------------------
 
-  updateSettings(patch: Partial<Settings>) {
+  updatePrefs(patch: Partial<Prefs>) {
+    const prefs = { ...this.data.settings.prefs, ...patch };
+    this.setData((d) => ({ ...d, settings: { ...d.settings, prefs } }));
+    const userId = this.data.userId;
+    this.save((sb) => sb.from("settings").update({ prefs }).eq("user_id", userId));
+  }
+
+  updateSettings(patch: Partial<Omit<Settings, "prefs">>) {
     this.setData((d) => ({ ...d, settings: { ...d.settings, ...patch } }));
     const userId = this.data.userId;
     this.save((sb) => sb.from("settings").update(patch).eq("user_id", userId));

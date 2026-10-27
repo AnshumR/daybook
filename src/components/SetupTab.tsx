@@ -1,18 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getStore, useData } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { todayISO } from "@/lib/dates";
 import { shortId } from "@/lib/ids";
-import { dayStats } from "@/lib/score";
-import { PRIORITY_LABEL, TIMEFRAME_LABEL, type Item, type Settings, type Task } from "@/lib/types";
+import { dayStats, wordEnabled } from "@/lib/score";
+import { DEFAULT_MODE, DEFAULT_THEME, isMode, isThemeId, THEME_IDS, THEMES, type Mode } from "@/lib/themes";
+import { wordForDate } from "@/lib/words";
+import { PRIORITY_LABEL, TIMEFRAME_LABEL, type Item, type Task } from "@/lib/types";
 import { Card, IconButton, Icons, InlineText } from "./ui";
 
 export default function SetupTab() {
   const data = useData();
   return (
     <>
+      <AppearanceCard />
+      <FeaturesCard />
       <ListEditor
         title="Habits"
         hint="Your daily routine. Renaming keeps all past ticks."
@@ -57,7 +61,7 @@ function ListEditor({
 }: {
   title: string;
   hint: string;
-  field: keyof Settings;
+  field: "habits" | "categories" | "areas";
   prefix: string;
   placeholder: string;
   items: Item[];
@@ -142,11 +146,11 @@ function ExportCard() {
     for (const t of data.tasks) tasksByDate.set(t.date, [...(tasksByDate.get(t.date) ?? []), t]);
     const dates = Array.from(new Set([...Object.keys(data.days), ...tasksByDate.keys()])).sort();
     const rows: (string | number)[][] = [
-      ["Date", ...settings.habits.map((h) => h.name), "Habits done", "Habits total", "Tasks done", "Tasks total", "Day score %", "Note"],
+      ["Date", ...settings.habits.map((h) => h.name), "Habits done", "Habits total", "Tasks done", "Tasks total", "Day score %", "Word", "Word sentence", "Note"],
     ];
     for (const d of dates) {
       const day = data.days[d];
-      const s = dayStats(settings, day, tasksByDate.get(d) ?? []);
+      const s = dayStats(settings, day, tasksByDate.get(d) ?? [], d);
       if (!s.logged) continue;
       rows.push([
         d,
@@ -156,6 +160,8 @@ function ExportCard() {
         s.tasksDone,
         s.tasksTotal,
         s.score,
+        s.wordCounts ? wordForDate(d).word : "",
+        day?.word_sentence ?? "",
         day?.note ?? "",
       ]);
     }
@@ -278,6 +284,119 @@ function AccountCard() {
             </div>
             {error && <p className="mt-2 text-sm text-high">Couldn’t delete: {error}</p>}
           </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function AppearanceCard() {
+  const data = useData();
+  const store = getStore();
+  const prefs = data.settings.prefs ?? {};
+  const theme = isThemeId(prefs.theme) ? prefs.theme : DEFAULT_THEME;
+  const mode = isMode(prefs.mode) ? prefs.mode : DEFAULT_MODE;
+  const modes: { id: Mode; label: string }[] = [
+    { id: "system", label: "Auto" },
+    { id: "light", label: "Light" },
+    { id: "dark", label: "Dark" },
+  ];
+
+  return (
+    <Card title="Appearance">
+      <p className="-mt-2 mb-3 text-sm text-muted">Pick your colours. Saved to your account on every device.</p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {THEME_IDS.map((id) => {
+          const t = THEMES[id];
+          const active = id === theme;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => store.updatePrefs({ theme: id })}
+              aria-pressed={active}
+              className={`flex items-center gap-2 rounded-xl border-2 p-2 text-left text-sm font-bold ${
+                active ? "border-accent" : "border-line"
+              }`}
+            >
+              <span className="flex shrink-0 overflow-hidden rounded-lg border border-line" aria-hidden="true">
+                <span className="h-7 w-4" style={{ background: t.light.bg }} />
+                <span className="h-7 w-4" style={{ background: t.light.accent }} />
+                <span className="h-7 w-4" style={{ background: t.dark.bg }} />
+              </span>
+              {t.name}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <span className="text-sm font-bold text-muted">Mode</span>
+        <div className="flex overflow-hidden rounded-full border border-line">
+          {modes.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => store.updatePrefs({ mode: m.id })}
+              aria-pressed={mode === m.id}
+              className={`px-3.5 py-1.5 text-sm font-bold ${mode === m.id ? "bg-accent text-accent-ink" : "text-muted"}`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function FeaturesCard() {
+  const data = useData();
+  const store = getStore();
+  const wordOn = wordEnabled(data.settings);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+
+  useEffect(() => {
+    setPermission("Notification" in window ? Notification.permission : "unsupported");
+  }, []);
+
+  async function enable() {
+    if (!("Notification" in window)) return;
+    setPermission(await Notification.requestPermission());
+  }
+
+  return (
+    <Card title="Features">
+      <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+        <div>
+          <p className="font-bold">Word of the day</p>
+          <p className="text-sm text-muted">An English word with its Hindi meaning. Write a sentence to tick it off.</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={wordOn}
+          aria-label="Word of the day"
+          onClick={() => store.updatePrefs({ wordOfDay: !wordOn })}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${wordOn ? "bg-accent" : "bg-line"}`}
+        >
+          <span className={`absolute top-1 h-5 w-5 rounded-full bg-card shadow transition-all ${wordOn ? "left-6" : "left-1"}`} />
+        </button>
+      </div>
+      <div className="pt-3">
+        <p className="font-bold">Reminders</p>
+        <p className="text-sm text-muted">
+          A nudge when a P1 task, or a task in your focus category, has waited 2 hours. Works while Daybook is open.
+        </p>
+        {permission === "granted" ? (
+          <p className="mt-2 text-sm font-bold text-accent">✓ Notifications are on</p>
+        ) : permission === "denied" ? (
+          <p className="mt-2 text-sm text-muted">Notifications are blocked. Allow them for this site in your browser settings.</p>
+        ) : permission === "unsupported" ? (
+          <p className="mt-2 text-sm text-muted">This browser can’t show notifications. You’ll still see the reminder banner.</p>
+        ) : (
+          <button type="button" onClick={() => void enable()} className="mt-2 rounded-xl bg-accent px-4 py-2 text-sm font-bold text-accent-ink">
+            Turn on notifications
+          </button>
         )}
       </div>
     </Card>

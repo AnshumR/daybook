@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Atkinson_Hyperlegible, Bricolage_Grotesque } from "next/font/google";
+import { THEME_BOOT_SCRIPT } from "@/lib/themes";
 import "./globals.css";
 
 const bricolage = Bricolage_Grotesque({
@@ -39,14 +40,17 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F3F5F2" },
-    { media: "(prefers-color-scheme: dark)", color: "#0F1513" },
+    { media: "(prefers-color-scheme: light)", color: "#F5F7FB" },
+    { media: "(prefers-color-scheme: dark)", color: "#0E1424" },
   ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-GB" className={`${bricolage.variable} ${atkinson.variable}`}>
+    <html lang="en-GB" className={`${bricolage.variable} ${atkinson.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-dvh">{children}</body>
     </html>
   );

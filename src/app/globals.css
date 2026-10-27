@@ -1,49 +1,42 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f3f5f2;
+  /* Base palette. Calm blue by default; the theme picker overrides these at runtime. */
+  --bg: #f5f7fb;
   --card: #ffffff;
-  --ink: #18221e;
-  --muted: #5d6b65;
-  --line: #dce3de;
-  --accent: #1e6b57;
+  --ink: #141b2d;
+  --muted: #5e6b82;
+  --line: #e1e6f0;
+  --accent: #3b6fe0;
   --accent-ink: #ffffff;
-  --accent-soft: #e3efe9;
-  --high: #b4441f;
-  --high-soft: #f6e4dc;
-  --medium: #9a6a08;
-  --medium-soft: #f5ecd6;
-  --low: #5d6b65;
-  --low-soft: #e9eeeb;
-  --heat-0: #e6ebe7;
-  --heat-1: #c9e0d5;
-  --heat-2: #8fc2ab;
-  --heat-3: #4e9a7d;
-  --heat-4: #1e6b57;
+  --high: #e5533d;
+  --medium: #c98a12;
   color-scheme: light;
+
+  /* Derived from the base palette so every theme stays consistent. */
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--card));
+  --high-soft: color-mix(in srgb, var(--high) 15%, var(--card));
+  --medium-soft: color-mix(in srgb, var(--medium) 16%, var(--card));
+  --low: var(--muted);
+  --low-soft: color-mix(in srgb, var(--muted) 13%, var(--card));
+  --heat-0: color-mix(in srgb, var(--ink) 7%, var(--card));
+  --heat-1: color-mix(in srgb, var(--accent) 28%, var(--heat-0));
+  --heat-2: color-mix(in srgb, var(--accent) 52%, var(--heat-0));
+  --heat-3: color-mix(in srgb, var(--accent) 76%, var(--heat-0));
+  --heat-4: var(--accent);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1513;
-    --card: #18201d;
-    --ink: #e7ede9;
-    --muted: #97a59f;
-    --line: #2b3632;
-    --accent: #4fb592;
-    --accent-ink: #0b1411;
-    --accent-soft: #1d3a31;
-    --high: #e5835f;
-    --high-soft: #3a2219;
-    --medium: #d9a641;
-    --medium-soft: #352a12;
-    --low: #97a59f;
-    --low-soft: #242d2a;
-    --heat-0: #222b28;
-    --heat-1: #1f4337;
-    --heat-2: #24654f;
-    --heat-3: #34896c;
-    --heat-4: #4fb592;
+  :root:not([data-mode="light"]) {
+    --bg: #0e1424;
+    --card: #161e33;
+    --ink: #e8edf7;
+    --muted: #93a0b8;
+    --line: #263049;
+    --accent: #6e9bff;
+    --accent-ink: #0b1220;
+    --high: #ff7a66;
+    --medium: #e8b54a;
     color-scheme: dark;
   }
 }

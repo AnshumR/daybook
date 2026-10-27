@@ -22,4 +22,5 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: "a_money", name: "Money" },
     { id: "a_personal", name: "Personal" },
   ],
+  prefs: {},
 };

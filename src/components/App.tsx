@@ -21,6 +21,7 @@ import MonthTab from "./MonthTab";
 import YearTab from "./YearTab";
 import GoalsTab from "./GoalsTab";
 import SetupTab from "./SetupTab";
+import Background from "./Background";
 
 export type Tab = "day" | "week" | "month" | "year" | "goals" | "setup";
 const TABS: { id: Tab; label: string }[] = [
@@ -91,6 +92,7 @@ export default function App() {
 
   return (
     <div className="mx-auto min-h-dvh max-w-[680px] pb-safe">
+      <Background />
       <header className="sticky top-0 z-20 border-b border-line bg-bg/95 pt-safe backdrop-blur">
         <div className="flex items-center justify-between gap-3 px-4 pt-3">
           <div className="min-w-0">
