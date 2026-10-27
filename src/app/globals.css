@@ -1,22 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  /* Base palette. Calm blue by default; the theme picker overrides these at runtime. */
-  --bg: #f5f7fb;
-  --card: #ffffff;
-  --ink: #141b2d;
-  --muted: #5e6b82;
-  --line: #e1e6f0;
-  --accent: #3b6fe0;
+  /* Base palette (Chai & paper). The theme picker overrides these at runtime. */
+  --bg: #faf3e7;
+  --card: #fffbf4;
+  --ink: #3b2a20;
+  --muted: #7a604e;
+  --line: #eadbc4;
+  --accent: #b4532f;
   --accent-ink: #ffffff;
-  --high: #e5533d;
-  --medium: #c98a12;
+  --high: #b4432a;
+  --medium: #8e6208;
+  --done: #5e7d55;
   color-scheme: light;
 
   /* Derived from the base palette so every theme stays consistent. */
   --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--card));
   --high-soft: color-mix(in srgb, var(--high) 15%, var(--card));
   --medium-soft: color-mix(in srgb, var(--medium) 16%, var(--card));
+  --done-soft: color-mix(in srgb, var(--done) 16%, var(--card));
   --low: var(--muted);
   --low-soft: color-mix(in srgb, var(--muted) 13%, var(--card));
   --heat-0: color-mix(in srgb, var(--ink) 7%, var(--card));
@@ -28,15 +30,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-mode="light"]) {
-    --bg: #0e1424;
-    --card: #161e33;
-    --ink: #e8edf7;
-    --muted: #93a0b8;
-    --line: #263049;
-    --accent: #6e9bff;
-    --accent-ink: #0b1220;
-    --high: #ff7a66;
-    --medium: #e8b54a;
+    --bg: #1d1611;
+    --card: #2a211a;
+    --ink: #f3e7d8;
+    --muted: #bca791;
+    --line: #3d3027;
+    --accent: #e08a5f;
+    --accent-ink: #1d1611;
+    --high: #f08b6e;
+    --medium: #e2b552;
+    --done: #9dbb92;
     color-scheme: dark;
   }
 }
@@ -50,6 +53,8 @@
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --color-accent-soft: var(--accent-soft);
+  --color-done: var(--done);
+  --color-done-soft: var(--done-soft);
   --color-high: var(--high);
   --color-high-soft: var(--high-soft);
   --color-medium: var(--medium);
@@ -61,8 +66,9 @@
   --color-heat-2: var(--heat-2);
   --color-heat-3: var(--heat-3);
   --color-heat-4: var(--heat-4);
-  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-hindi: var(--font-tiro), var(--font-nunito), serif;
 }
 
 @layer base {
@@ -82,6 +88,10 @@
   h2,
   h3 {
     font-family: var(--font-display);
+  }
+
+  [lang="hi"] {
+    font-family: var(--font-hindi);
   }
 
   input,

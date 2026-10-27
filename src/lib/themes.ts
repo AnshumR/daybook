@@ -1,5 +1,6 @@
-export type ThemeId = "blue" | "green" | "warm" | "lavender" | "mono";
-export type Mode = "system" | "light" | "dark";
+export type ThemeId = "chai" | "blue" | "green" | "warm" | "lavender" | "mono";
+/** "time" follows the clock: morning, afternoon, evening, night. */
+export type Mode = "time" | "system" | "light" | "dark";
 
 type Palette = {
   bg: string;
@@ -11,9 +12,18 @@ type Palette = {
   accentInk: string;
   high: string;
   medium: string;
+  /** Colour for ticked items; defaults to the accent. */
+  done?: string;
 };
 
-export const THEMES: Record<ThemeId, { name: string; light: Palette; dark: Palette }> = {
+export const THEMES: Record<ThemeId, { name: string; light: Palette; dark: Palette; day?: Palette; evening?: Palette }> = {
+  chai: {
+    name: "Chai & paper",
+    light: { bg: "#FAF3E7", card: "#FFFBF4", ink: "#3B2A20", muted: "#7A604E", line: "#EADBC4", accent: "#B4532F", accentInk: "#FFFFFF", high: "#B4432A", medium: "#8E6208", done: "#5E7D55" },
+    day: { bg: "#FBF7F0", card: "#FFFFFF", ink: "#3B2A20", muted: "#76604F", line: "#EDE2D3", accent: "#B4532F", accentInk: "#FFFFFF", high: "#B4432A", medium: "#8E6208", done: "#5E7D55" },
+    evening: { bg: "#F7E4D4", card: "#FFF5EC", ink: "#3E2A2A", muted: "#7A5A50", line: "#EBCDB8", accent: "#A9472E", accentInk: "#FFFFFF", high: "#A23A24", medium: "#86590A", done: "#5E7D55" },
+    dark: { bg: "#1D1611", card: "#2A211A", ink: "#F3E7D8", muted: "#BCA791", line: "#3D3027", accent: "#E08A5F", accentInk: "#1D1611", high: "#F08B6E", medium: "#E2B552", done: "#9DBB92" },
+  },
   blue: {
     name: "Calm blue",
     light: { bg: "#F5F7FB", card: "#FFFFFF", ink: "#141B2D", muted: "#5E6B82", line: "#E1E6F0", accent: "#3B6FE0", accentInk: "#FFFFFF", high: "#E5533D", medium: "#C98A12" },
@@ -42,26 +52,34 @@ export const THEMES: Record<ThemeId, { name: string; light: Palette; dark: Palet
 };
 
 export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
-export const DEFAULT_THEME: ThemeId = "blue";
-export const DEFAULT_MODE: Mode = "system";
+export const DEFAULT_THEME: ThemeId = "chai";
+export const DEFAULT_MODE: Mode = "time";
 const STORAGE_KEY = "daybook.theme";
 
 export function isThemeId(v: unknown): v is ThemeId {
   return typeof v === "string" && v in THEMES;
 }
 export function isMode(v: unknown): v is Mode {
-  return v === "system" || v === "light" || v === "dark";
+  return v === "time" || v === "system" || v === "light" || v === "dark";
 }
 
 // Plain JS so the same code can run inline in <head> before first paint.
 const APPLY_SOURCE = `function(themes, theme, mode) {
-  var t = themes[theme] || themes.blue;
-  var dark = mode === "dark" || (mode !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  var p = dark ? t.dark : t.light;
+  var t = themes[theme] || themes.chai;
+  var h = new Date().getHours();
+  var dark, p;
+  if (mode === "time") {
+    dark = h >= 21 || h < 5;
+    p = dark ? t.dark : h >= 17 ? (t.evening || t.light) : h >= 11 ? (t.day || t.light) : t.light;
+  } else {
+    dark = mode === "dark" || (mode !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    p = dark ? t.dark : t.light;
+  }
   var s = document.documentElement.style;
   s.setProperty("--bg", p.bg); s.setProperty("--card", p.card); s.setProperty("--ink", p.ink);
   s.setProperty("--muted", p.muted); s.setProperty("--line", p.line); s.setProperty("--accent", p.accent);
   s.setProperty("--accent-ink", p.accentInk); s.setProperty("--high", p.high); s.setProperty("--medium", p.medium);
+  s.setProperty("--done", p.done || p.accent);
   s.colorScheme = dark ? "dark" : "light";
   document.documentElement.setAttribute("data-mode", dark ? "dark" : "light");
   var metas = document.querySelectorAll('meta[name="theme-color"]');
@@ -86,3 +104,9 @@ export const THEME_BOOT_SCRIPT = `(function(){try{
   var saved = {}; try { saved = JSON.parse(localStorage.getItem("${STORAGE_KEY}") || "{}"); } catch (e) {}
   (${APPLY_SOURCE})(themes, saved.theme || "${DEFAULT_THEME}", saved.mode || "${DEFAULT_MODE}");
 }catch(e){}})();`;
+
+/** Part of the day, for greetings. */
+export function partOfDay(d: Date = new Date()): "morning" | "afternoon" | "evening" | "night" {
+  const h = d.getHours();
+  return h >= 21 || h < 5 ? "night" : h >= 17 ? "evening" : h >= 12 ? "afternoon" : "morning";
+}

@@ -8,6 +8,7 @@ import { shortId } from "@/lib/ids";
 import { dayStats, wordEnabled } from "@/lib/score";
 import { DEFAULT_MODE, DEFAULT_THEME, isMode, isThemeId, THEME_IDS, THEMES, type Mode } from "@/lib/themes";
 import { wordForDate } from "@/lib/words";
+import { formatClock, plannedAt } from "@/lib/insights";
 import { PRIORITY_LABEL, TIMEFRAME_LABEL, type Item, type Task } from "@/lib/types";
 import { Card, IconButton, Icons, InlineText } from "./ui";
 
@@ -146,7 +147,7 @@ function ExportCard() {
     for (const t of data.tasks) tasksByDate.set(t.date, [...(tasksByDate.get(t.date) ?? []), t]);
     const dates = Array.from(new Set([...Object.keys(data.days), ...tasksByDate.keys()])).sort();
     const rows: (string | number)[][] = [
-      ["Date", ...settings.habits.map((h) => h.name), "Habits done", "Habits total", "Tasks done", "Tasks total", "Day score %", "Word", "Word sentence", "Note"],
+      ["Date", ...settings.habits.map((h) => h.name), "Habits done", "Habits total", "Tasks done", "Tasks total", "Day score %", "Word", "Word sentence", "Went well", "To improve", "Note", "Planned at", "Minutes in Daybook", "Screen time (min)"],
     ];
     for (const d of dates) {
       const day = data.days[d];
@@ -162,7 +163,15 @@ function ExportCard() {
         s.score,
         s.wordCounts ? wordForDate(d).word : "",
         day?.word_sentence ?? "",
+        day?.went_well ?? "",
+        day?.improve ?? "",
         day?.note ?? "",
+        (() => {
+          const p = plannedAt(tasksByDate.get(d) ?? [], d);
+          return p ? `${p.nightBefore ? "night before " : ""}${formatClock(p.time)}` : "";
+        })(),
+        Math.round((day?.app_seconds ?? 0) / 60),
+        day?.screen_minutes ?? "",
       ]);
     }
     downloadCSV(`daybook-daily-log-${stamp}.csv`, rows);
@@ -297,6 +306,7 @@ function AppearanceCard() {
   const theme = isThemeId(prefs.theme) ? prefs.theme : DEFAULT_THEME;
   const mode = isMode(prefs.mode) ? prefs.mode : DEFAULT_MODE;
   const modes: { id: Mode; label: string }[] = [
+    { id: "time", label: "By time" },
     { id: "system", label: "Auto" },
     { id: "light", label: "Light" },
     { id: "dark", label: "Dark" },
@@ -304,7 +314,9 @@ function AppearanceCard() {
 
   return (
     <Card title="Appearance">
-      <p className="-mt-2 mb-3 text-sm text-muted">Pick your colours. Saved to your account on every device.</p>
+      <p className="-mt-2 mb-3 text-sm text-muted">
+        Pick your colours. “By time” shifts from morning paper to a warm evening and a dark night. Saved to your account.
+      </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {THEME_IDS.map((id) => {
           const t = THEMES[id];
@@ -329,7 +341,7 @@ function AppearanceCard() {
           );
         })}
       </div>
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <span className="text-sm font-bold text-muted">Mode</span>
         <div className="flex overflow-hidden rounded-full border border-line">
           {modes.map((m) => (

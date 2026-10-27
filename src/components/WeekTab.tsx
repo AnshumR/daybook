@@ -3,6 +3,7 @@
 import { getStore, useData } from "@/lib/store";
 import { addDays, formatShort, formatWeekdayShort, startOfWeek, todayISO } from "@/lib/dates";
 import { habitDone, useTasksByDate } from "@/lib/derive";
+import { clockFromMinutes, formatMinutes, minutesOfDay, plannedAt } from "@/lib/insights";
 import { dayStats } from "@/lib/score";
 import type { Navigate } from "./App";
 import { Card, ProgressBar } from "./ui";
@@ -20,8 +21,50 @@ export default function WeekTab({ date, navigate }: { date: string; navigate: Na
   const end = date > today ? today : date;
   const last30 = Array.from({ length: 30 }, (_, i) => addDays(end, -29 + i));
 
+  // Insights over the days of this week that have started.
+  const elapsed = week.filter((d) => d <= today);
+  const planned = elapsed.map((d) => plannedAt(tasksByDate.get(d) ?? [], d)).filter((p): p is NonNullable<typeof p> => !!p);
+  const nightBefore = planned.filter((p) => p.nightBefore).length;
+  const morning = planned.filter((p) => !p.nightBefore).map((p) => minutesOfDay(p.time));
+  const appMinutes = elapsed.reduce((n, d) => n + (data.days[d]?.app_seconds ?? 0) / 60, 0);
+  const screens = elapsed.map((d) => data.days[d]?.screen_minutes).filter((m): m is number => m != null);
+  const reflected = elapsed.filter((d) => data.days[d]?.went_well?.trim() || data.days[d]?.improve?.trim()).length;
+  const best = elapsed
+    .map((d, i) => ({ d, s: stats[week.indexOf(d)] ?? stats[i] }))
+    .filter((x) => x.s.logged)
+    .sort((a, b) => b.s.score - a.s.score)[0];
+
+  const insights: [string, string][] = [
+    [
+      "Planning",
+      planned.length === 0
+        ? "No days planned yet"
+        : [
+            morning.length ? `usually by ${clockFromMinutes(morning.reduce((a, b) => a + b, 0) / morning.length)}` : "",
+            nightBefore ? `${nightBefore} ${nightBefore === 1 ? "night" : "nights"} before` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ") + ` (${planned.length}/${elapsed.length} days)`,
+    ],
+    ["Time in Daybook", appMinutes >= 1 ? `${formatMinutes(appMinutes)} total` : "Just getting started"],
+    ["Phone screen time", screens.length ? `${formatMinutes(screens.reduce((a, b) => a + b, 0) / screens.length)} a day (${screens.length} ${screens.length === 1 ? "day" : "days"} noted)` : "Not noted yet"],
+    ["Reflections", `${reflected} of ${elapsed.length} days`],
+    ["Best day", best ? `${formatWeekdayShort(best.d)} ${Number(best.d.slice(8))} · ${best.s.score}%` : "–"],
+  ];
+
   return (
     <>
+      <Card title="This week">
+        <dl className="flex flex-col">
+          {insights.map(([k, v]) => (
+            <div key={k} className="flex items-baseline justify-between gap-3 border-b border-line py-2 last:border-0">
+              <dt className="text-sm font-bold text-muted">{k}</dt>
+              <dd className="text-right font-semibold">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
+
       <Card title="Habits this week">
         <div className="grid grid-cols-7 gap-1.5">
           {week.map((d) => (

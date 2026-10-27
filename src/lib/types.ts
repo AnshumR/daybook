@@ -24,7 +24,15 @@ export type Day = {
   habits_done: string[];
   note: string;
   word_sentence?: string;
+  went_well?: string;
+  improve?: string;
+  /** Seconds Daybook was open on this date. */
+  app_seconds?: number;
+  /** Phone screen time typed in by the user, in minutes. */
+  screen_minutes?: number | null;
 };
+
+export type DayTextField = "note" | "word_sentence" | "went_well" | "improve";
 
 export type Task = {
   id: string;

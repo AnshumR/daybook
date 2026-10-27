@@ -1,18 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Atkinson_Hyperlegible, Bricolage_Grotesque } from "next/font/google";
+import { Fraunces, Nunito, Tiro_Devanagari_Hindi } from "next/font/google";
 import { THEME_BOOT_SCRIPT } from "@/lib/themes";
 import "./globals.css";
 
-const bricolage = Bricolage_Grotesque({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  variable: "--font-bricolage",
+  weight: ["500", "700"],
+  variable: "--font-fraunces",
   display: "swap",
 });
 
-const atkinson = Atkinson_Hyperlegible({
+const nunito = Nunito({
   subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-atkinson",
+  weight: ["400", "600", "700", "800"],
+  variable: "--font-nunito",
+  display: "swap",
+});
+
+const tiro = Tiro_Devanagari_Hindi({
+  subsets: ["devanagari"],
+  weight: "400",
+  variable: "--font-tiro",
   display: "swap",
 });
 
@@ -40,14 +48,14 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F5F7FB" },
-    { media: "(prefers-color-scheme: dark)", color: "#0E1424" },
+    { media: "(prefers-color-scheme: light)", color: "#FAF3E7" },
+    { media: "(prefers-color-scheme: dark)", color: "#1D1611" },
   ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-GB" className={`${bricolage.variable} ${atkinson.variable}`} suppressHydrationWarning>
+    <html lang="en-GB" className={`${fraunces.variable} ${nunito.variable} ${tiro.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>

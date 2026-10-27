@@ -14,10 +14,10 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={`rounded-2xl border border-line bg-card p-4 shadow-[0_1px_0_var(--line)] ${className}`}>
+    <section className={`rounded-[22px] bg-card p-4 shadow-[0_2px_0_var(--line)] ${className}`}>
       {(title || action) && (
         <div className="mb-3 flex items-center justify-between gap-3">
-          {title && <h2 className="text-lg font-bold tracking-tight">{title}</h2>}
+          {title && <h2 className="text-xl font-bold">{title}</h2>}
           {action}
         </div>
       )}
@@ -28,7 +28,7 @@ export function Card({
 
 export function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-line bg-card px-3 py-3">
+    <div className="rounded-[18px] bg-card px-3 py-3 shadow-[0_2px_0_var(--line)]">
       <div className="text-xs font-bold uppercase tracking-wide text-muted">{label}</div>
       <div className="mt-1 font-display text-2xl font-bold tabular-nums">{value}</div>
       {sub && <div className="text-xs text-muted">{sub}</div>}
@@ -169,7 +169,7 @@ export function Checkbox({
   label: string;
   size?: "sm" | "md";
 }) {
-  const dim = size === "sm" ? "h-5 w-5" : "h-6 w-6";
+  const dim = size === "sm" ? "h-6 w-6" : "h-7 w-7";
   return (
     <button
       type="button"
@@ -177,8 +177,8 @@ export function Checkbox({
       aria-checked={checked}
       aria-label={label}
       onClick={onChange}
-      className={`${dim} grid shrink-0 place-items-center rounded-md border-2 transition-colors ${
-        checked ? "border-accent bg-accent text-accent-ink" : "border-line bg-card"
+      className={`${dim} grid shrink-0 place-items-center rounded-full border-2 transition-colors ${
+        checked ? "border-done bg-done text-card" : "border-line bg-card"
       }`}
     >
       {checked && (
@@ -252,3 +252,30 @@ export function tagColour(index: number): string {
 }
 
 export const HEAT_CLASS = ["bg-heat-0", "bg-heat-1", "bg-heat-2", "bg-heat-3", "bg-heat-4"];
+
+/** Circular progress with the percentage in the middle. */
+export function Ring({ value, size = 60 }: { value: number; size?: number }) {
+  const r = size / 2 - 5;
+  const c = 2 * Math.PI * r;
+  const v = Math.max(0, Math.min(100, value));
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={`Day score ${v}%`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--line)" strokeWidth="7" />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={`${(v / 100) * c} ${c}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          className="transition-[stroke-dasharray] duration-500"
+        />
+      </svg>
+      <span className="absolute inset-0 grid place-items-center text-[15px] font-extrabold tabular-nums">{v}%</span>
+    </div>
+  );
+}

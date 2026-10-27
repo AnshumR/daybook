@@ -25,7 +25,7 @@ import Background from "./Background";
 
 export type Tab = "day" | "week" | "month" | "year" | "goals" | "setup";
 const TABS: { id: Tab; label: string }[] = [
-  { id: "day", label: "Day" },
+  { id: "day", label: "Today" },
   { id: "week", label: "Week" },
   { id: "month", label: "Month" },
   { id: "year", label: "Year" },
@@ -89,41 +89,23 @@ export default function App() {
   }
 
   const today = todayISO();
+  const dated = tab === "day" || tab === "week" || tab === "month" || tab === "year";
 
   return (
-    <div className="mx-auto min-h-dvh max-w-[680px] pb-safe">
+    <div className="mx-auto min-h-dvh max-w-[680px]">
       <Background />
-      <header className="sticky top-0 z-20 border-b border-line bg-bg/95 pt-safe backdrop-blur">
-        <div className="flex items-center justify-between gap-3 px-4 pt-3">
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-widest text-accent">Daybook</p>
-            <h1 className="truncate text-xl font-bold tracking-tight">{headerTitle(tab, date)}</h1>
-          </div>
+      <header className="sticky top-0 z-20 bg-bg/90 pt-safe backdrop-blur">
+        <div className="flex min-h-14 items-center gap-2 px-3">
+          {dated ? (
+            <DateNav tab={tab} date={date} today={today} setDate={setDate} />
+          ) : (
+            <h1 className="flex-1 px-1 text-2xl font-bold">{tab === "goals" ? "Goals" : "Setup"}</h1>
+          )}
           <SaveIndicator status={state.status} />
         </div>
-
-        {(tab === "day" || tab === "week" || tab === "month" || tab === "year") && (
-          <DateNav tab={tab} date={date} today={today} setDate={setDate} />
-        )}
-
-        <nav className="no-scrollbar flex gap-1 overflow-x-auto px-3 pb-2 pt-2" aria-label="Sections">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => navigate(t.id)}
-              aria-current={tab === t.id ? "page" : undefined}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-bold ${
-                tab === t.id ? "bg-ink text-bg" : "text-muted hover:bg-card hover:text-ink"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
       </header>
 
-      <main className="flex flex-col gap-4 px-4 py-4">
+      <main className="flex flex-col gap-4 px-4 pb-32 pt-2">
         {tab === "day" && <DayTab date={date} />}
         {tab === "week" && <WeekTab date={date} navigate={navigate} />}
         {tab === "month" && <MonthTab date={date} navigate={navigate} />}
@@ -131,26 +113,88 @@ export default function App() {
         {tab === "goals" && <GoalsTab navigate={navigate} />}
         {tab === "setup" && <SetupTab />}
       </main>
+
+      <nav
+        aria-label="Sections"
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-card/95 pb-safe backdrop-blur"
+      >
+        <div className="mx-auto grid max-w-[680px] grid-cols-6 px-1">
+          {TABS.map((t) => {
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => navigate(t.id, t.id === "day" && tab === "day" ? today : undefined)}
+                aria-current={active ? "page" : undefined}
+                className={`flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-extrabold ${
+                  active ? "text-accent" : "text-muted"
+                }`}
+              >
+                {TAB_ICONS[t.id]}
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
 
-function headerTitle(tab: Tab, date: string): string {
+const iconProps = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
+const TAB_ICONS: Record<Tab, React.ReactNode> = {
+  day: (
+    <svg {...iconProps}>
+      <circle cx="12" cy="12" r="4.5" />
+      <path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" />
+    </svg>
+  ),
+  week: (
+    <svg {...iconProps}>
+      <rect x="3.5" y="5" width="17" height="15" rx="3" />
+      <path d="M3.5 10h17M8 3v4M16 3v4" />
+    </svg>
+  ),
+  month: (
+    <svg {...iconProps}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+      <path d="M8 9h.01M12 9h.01M16 9h.01M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01" strokeWidth="2.6" />
+    </svg>
+  ),
+  year: (
+    <svg {...iconProps}>
+      <path d="M4 20V10M10 20V4M16 20v-7M21 20H3" />
+    </svg>
+  ),
+  goals: (
+    <svg {...iconProps}>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="12" cy="12" r="0.8" fill="currentColor" />
+    </svg>
+  ),
+  setup: (
+    <svg {...iconProps}>
+      <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
+      <circle cx="16" cy="7" r="2.2" />
+      <circle cx="8" cy="17" r="2.2" />
+    </svg>
+  ),
+};
+
+function headerTitle(tab: "day" | "week" | "month" | "year", date: string): string {
   switch (tab) {
     case "day":
       return formatLong(date);
     case "week": {
       const start = startOfWeek(date);
-      return `Week of ${formatShort(start)} – ${formatShort(addDays(start, 6))}`;
+      return `${formatShort(start)} – ${formatShort(addDays(start, 6))}`;
     }
     case "month":
       return formatMonthYear(date);
     case "year":
       return String(yearOf(date));
-    case "goals":
-      return "Goals";
-    case "setup":
-      return "Setup";
   }
 }
 
@@ -171,8 +215,8 @@ function DateNav({
     if (tab === "month") return addMonths(date, n);
     return addYears(date, n);
   };
-  const unit = { day: "day", week: "week", month: "month", year: "year" }[tab];
-  const currentLabel = { day: "Today", week: "This week", month: "This month", year: "This year" }[tab];
+  const unit = tab;
+  const currentLabel = { day: "Back to today", week: "Back to this week", month: "Back to this month", year: "Back to this year" }[tab];
   const isCurrent =
     tab === "day"
       ? date === today
@@ -182,18 +226,22 @@ function DateNav({
           ? date.slice(0, 7) === today.slice(0, 7)
           : date.slice(0, 4) === today.slice(0, 4);
 
-  const btn =
-    "flex items-center gap-1 rounded-full border border-line bg-card px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40";
+  const arrow = "grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink hover:bg-card";
   return (
-    <div className="flex items-center justify-between gap-2 px-4 pt-2">
-      <button type="button" className={btn} onClick={() => setDate(step(-1))} aria-label={`Previous ${unit}`}>
-        {Icons.left} Prev
+    <div className="flex min-w-0 flex-1 items-center gap-1">
+      <button type="button" className={arrow} onClick={() => setDate(step(-1))} aria-label={`Previous ${unit}`}>
+        {Icons.left}
       </button>
-      <button type="button" className={btn} onClick={() => setDate(today)} disabled={isCurrent && date === today}>
-        {currentLabel}
-      </button>
-      <button type="button" className={btn} onClick={() => setDate(step(1))} aria-label={`Next ${unit}`}>
-        Next {Icons.right}
+      <div className="min-w-0 flex-1 text-center">
+        <p className="truncate font-display text-lg font-bold">{headerTitle(tab, date)}</p>
+        {!isCurrent && (
+          <button type="button" onClick={() => setDate(today)} className="text-xs font-extrabold text-accent">
+            {currentLabel}
+          </button>
+        )}
+      </div>
+      <button type="button" className={arrow} onClick={() => setDate(step(1))} aria-label={`Next ${unit}`}>
+        {Icons.right}
       </button>
     </div>
   );

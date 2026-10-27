@@ -13,7 +13,7 @@ A personal daily planner and life tracker. Plan the day, tick off your routine, 
 - **Goals**: area, timeframe, target date, days left or overdue, progress in ±10% steps, and a next step with "Plan it today".
 - **Setup**: add, rename, reorder and remove habits, categories and goal areas. Renames keep history because everything is stored by id. CSV exports and account deletion.
 
-**New in this version:** a calmer Day page with a Focus mode per category, tasks that carry over automatically, P1/P2/P3 priorities, 2-hour reminders for P1 or focus tasks, an English word of the day with its Hindi meaning (write a sentence to tick it off), and a theme picker (5 colour themes, light/dark/auto) under Setup.
+**New in this version:** a calmer Day page with a Focus mode per category, tasks that carry over automatically, P1/P2/P3 priorities, 2-hour reminders for P1 or focus tasks, an English word of the day with its Hindi meaning (write a sentence to tick it off), a theme picker under Setup (default *Chai & paper*, which shifts with the time of day), an evening reflection, time tracking (when you planned, time in Daybook, phone screen time), weekly insights and a one-tap **Day report** to copy or share.
 
 ## Setup
 
@@ -35,7 +35,7 @@ You need free accounts on [Supabase](https://supabase.com), [Google Cloud](https
 
 (If you use the Supabase CLI instead: `supabase link --project-ref <ref>` then `supabase db push`.)
 
-> **Updating later:** run every file in `supabase/migrations/` in date order. If you set up before 28 Oct 2026, also run `20261028000000_word_and_prefs.sql` (word of the day + themes). It's safe to run twice.
+> **Updating later:** run every file in `supabase/migrations/` in date order. If you set up earlier, also run any newer files you haven't run yet, e.g. `20261028000000_word_and_prefs.sql` (word of the day + themes) and `20261029000000_reflection_and_time.sql` (reflection + time tracking). Each is safe to run twice.
 
 ### 3. Create a Google OAuth client
 

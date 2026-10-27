@@ -6,13 +6,15 @@ import { createClient } from "./supabase/client";
 import { DEFAULT_SETTINGS } from "./defaults";
 import { uuid } from "./ids";
 import { todayISO } from "./dates";
-import type { Day, Goal, MonthNote, Prefs, Priority, Settings, Task, YearNote } from "./types";
+import type { Day, DayTextField, Goal, MonthNote, Prefs, Priority, Settings, Task, YearNote } from "./types";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export type Data = {
   userId: string;
   email: string;
+  /** First name for the greeting. */
+  name: string;
   settings: Settings;
   days: Record<string, Day>;
   tasks: Task[];
@@ -167,6 +169,7 @@ class DaybookStore {
         data: {
           userId: user.id,
           email: user.email ?? "",
+          name: firstName(user.user_metadata, user.email),
           settings,
           days: Object.fromEntries(days.map((d) => [d.date, { ...d, habits_done: d.habits_done ?? [] }])),
           tasks,
@@ -189,7 +192,16 @@ class DaybookStore {
   // land out of sequence. The UI has already been updated optimistically.
   // ---------------------------------------------------------------------------
 
-  private save(fn: (sb: SupabaseClient) => PromiseLike<{ error: unknown }>) {
+  private save(fn: (sb: SupabaseClient) => PromiseLike<{ error: unknown }>, quiet = false) {
+    if (quiet) {
+      // Background bookkeeping (time tracking): never touches the save indicator.
+      this.queue = this.queue.then(async () => {
+        try {
+          await fn(this.sb);
+        } catch {}
+      });
+      return;
+    }
     this.pending++;
     if (this.savedTimer) clearTimeout(this.savedTimer);
     this.setStatus("saving");
@@ -256,23 +268,46 @@ class DaybookStore {
   }
 
   setDayNote(date: string, note: string) {
-    this.patchDay(date, { note });
+    this.setDayText(date, "note", note);
+  }
+
+  /** Free-text fields on a day (notes, reflection, word sentence), saved after a short pause. */
+  setDayText(date: string, field: DayTextField, value: string) {
+    this.patchDay(date, { [field]: value });
     const userId = this.data.userId;
-    this.debounce(`note:${date}`, () => {
-      const latest = this.state.phase === "ready" ? (this.state.data.days[date]?.note ?? "") : note;
-      this.save((sb) => sb.from("days").upsert({ user_id: userId, date, note: latest }, { onConflict: "user_id,date" }));
+    this.debounce(`${field}:${date}`, () => {
+      const latest = this.state.phase === "ready" ? (this.state.data.days[date]?.[field] ?? "") : value;
+      this.save((sb) =>
+        sb.from("days").upsert({ user_id: userId, date, [field]: latest }, { onConflict: "user_id,date" }),
+      );
     });
   }
 
-  setWordSentence(date: string, sentence: string) {
-    this.patchDay(date, { word_sentence: sentence });
+  setScreenMinutes(date: string, minutes: number | null) {
+    this.patchDay(date, { screen_minutes: minutes });
     const userId = this.data.userId;
-    this.debounce(`word:${date}`, () => {
-      const latest = this.state.phase === "ready" ? (this.state.data.days[date]?.word_sentence ?? "") : sentence;
+    this.debounce(`screen:${date}`, () => {
+      const latest = this.state.phase === "ready" ? (this.state.data.days[date]?.screen_minutes ?? null) : minutes;
       this.save((sb) =>
-        sb.from("days").upsert({ user_id: userId, date, word_sentence: latest }, { onConflict: "user_id,date" }),
+        sb.from("days").upsert({ user_id: userId, date, screen_minutes: latest }, { onConflict: "user_id,date" }),
       );
     });
+  }
+
+  /** Adds time the app was open today. Saved quietly in the background. */
+  addAppSeconds(date: string, seconds: number) {
+    if (this.state.phase !== "ready" || seconds <= 0) return;
+    const total = (this.data.days[date]?.app_seconds ?? 0) + Math.round(seconds);
+    this.patchDay(date, { app_seconds: total });
+    const userId = this.data.userId;
+    this.save(
+      (sb) => sb.from("days").upsert({ user_id: userId, date, app_seconds: total }, { onConflict: "user_id,date" }),
+      true,
+    );
+  }
+
+  setWordSentence(date: string, sentence: string) {
+    this.setDayText(date, "word_sentence", sentence);
   }
 
   // ---------------------------------------------------------------------------
@@ -411,6 +446,15 @@ class DaybookStore {
     window.location.href = "/login?deleted=1";
     return null;
   }
+}
+
+function firstName(meta: Record<string, unknown> | undefined, email: string | undefined): string {
+  const given = typeof meta?.given_name === "string" ? meta.given_name : "";
+  const full = typeof meta?.full_name === "string" ? meta.full_name : typeof meta?.name === "string" ? meta.name : "";
+  const name = given || full.split(" ")[0] || "";
+  if (name) return name;
+  const local = (email ?? "").split("@")[0].replace(/[._\d]+/g, " ").trim().split(" ")[0] ?? "";
+  return local ? local[0].toUpperCase() + local.slice(1) : "";
 }
 
 let store: DaybookStore | null = null;

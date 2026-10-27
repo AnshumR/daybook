@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useData } from "@/lib/store";
+import { getStore, useData } from "@/lib/store";
 import { todayISO } from "@/lib/dates";
 import { overdueTasks } from "@/lib/reminders";
 import { applyTheme, DEFAULT_MODE, DEFAULT_THEME, isMode, isThemeId } from "@/lib/themes";
@@ -18,12 +18,43 @@ export default function Background() {
 
   useEffect(() => {
     applyTheme(theme, mode);
+    if (mode === "time") {
+      // Morning → afternoon → evening → night: re-check every few minutes.
+      const id = setInterval(() => applyTheme(theme, mode), 5 * 60_000);
+      return () => clearInterval(id);
+    }
     if (mode !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => applyTheme(theme, mode);
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, [theme, mode]);
+
+  // Time spent in Daybook: count seconds while the page is visible, save each minute.
+  useEffect(() => {
+    let pending = 0;
+    let last = Date.now();
+    const tick = () => {
+      const now = Date.now();
+      if (document.visibilityState === "visible") pending += Math.min(now - last, 30_000) / 1000;
+      last = now;
+    };
+    const flush = () => {
+      tick();
+      if (pending >= 1) getStore().addAppSeconds(todayISO(), pending);
+      pending = 0;
+    };
+    const counter = setInterval(tick, 5_000);
+    const saver = setInterval(flush, 60_000);
+    const onVisibility = () => (document.visibilityState === "hidden" ? flush() : (last = Date.now()));
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(counter);
+      clearInterval(saver);
+      document.removeEventListener("visibilitychange", onVisibility);
+      flush();
+    };
+  }, []);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
