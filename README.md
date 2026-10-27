@@ -68,7 +68,7 @@ For local sign-in to work, add `http://localhost:3000/**` under **Supabase → A
 1. <https://vercel.com/new> → **Import** the `daybook` GitHub repository. The framework is detected as Next.js automatically.
 2. Under **Environment Variables**, add:
    - `NEXT_PUBLIC_SUPABASE_URL` = your Project URL
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = your anon / publishable key
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = your publishable key (`sb_publishable_…`). On older projects, `NEXT_PUBLIC_SUPABASE_ANON_KEY` with the anon key also works.
 3. Click **Deploy** and note your URL, e.g. `https://daybook-xyz.vercel.app`.
 
 ### 7. Add the Vercel URL to Supabase
