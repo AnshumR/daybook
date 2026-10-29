@@ -500,7 +500,8 @@ class DaybookStore {
   sendToBacklog(id: string) {
     const t = this.data.tasks.find((x) => x.id === id);
     if (t?.running_since) this.pauseTask(id);
-    this.updateTask(id, { date: null, position: null });
+    // The backlog has no dates at all: clear the day and any reminder.
+    this.updateTask(id, { date: null, position: null, remind_at: null });
   }
 
   setReminder(id: string, remindAt: string | null) {

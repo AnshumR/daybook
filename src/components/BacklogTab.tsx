@@ -2,11 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getStore, useData } from "@/lib/store";
-import { addDays, todayISO } from "@/lib/dates";
-import { formatReminder } from "@/lib/reminders";
+import { todayISO } from "@/lib/dates";
 import { PRIORITIES, PRIORITY_LABEL, PRIORITY_NAME, PRIORITY_RANK, type Priority, type Task } from "@/lib/types";
 import type { Navigate } from "./App";
-import ReminderPicker from "./ReminderPicker";
 import { Card, IconButton, InlineText, tagColour } from "./ui";
 
 export default function BacklogTab({ navigate }: { navigate: Navigate }) {
@@ -17,24 +15,16 @@ export default function BacklogTab({ navigate }: { navigate: Navigate }) {
   const [text, setText] = useState("");
   const [category, setCategory] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
-  const [remind, setRemind] = useState<string | null>(null);
-  const [showRemind, setShowRemind] = useState(false);
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const now = useMinute();
 
   const backlog = data.tasks.filter((t) => t.date === null && !t.done);
   const items = useMemo(() => {
     const list = filter ? backlog.filter((t) => t.category_id === filter) : backlog;
-    const due = (t: Task) => (t.remind_at && Date.parse(t.remind_at) <= now ? 0 : 1);
     return [...list].sort(
-      (a, b) =>
-        due(a) - due(b) ||
-        PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
-        (a.remind_at ?? "9999").localeCompare(b.remind_at ?? "9999") ||
-        a.created_at.localeCompare(b.created_at),
+      (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || a.created_at.localeCompare(b.created_at),
     );
-  }, [backlog, filter, now]);
+  }, [backlog, filter]);
 
   const addCategory = filter ?? (category || categories[0]?.id || null);
   const catIndex = (id: string | null) => categories.findIndex((c) => c.id === id);
@@ -43,10 +33,9 @@ export default function BacklogTab({ navigate }: { navigate: Navigate }) {
     e.preventDefault();
     const t = text.trim();
     if (!t) return;
-    store.addBacklogTask(t, addCategory, priority, remind);
+    // Backlog tasks never get a date or reminder; picking for Today gives them a day.
+    store.addBacklogTask(t, addCategory, priority, null);
     setText("");
-    setRemind(null);
-    setShowRemind(false);
   }
 
   function pick(t: Task, date: string) {
@@ -60,7 +49,7 @@ export default function BacklogTab({ navigate }: { navigate: Navigate }) {
 
   return (
     <>
-      <p className="-mt-1 px-1 text-sm text-muted">Everything you might do. Pick what fits today, set reminders for the rest.</p>
+      <p className="-mt-1 px-1 text-sm text-muted">Everything you might do, with no dates. Tap Today when you want to do it.</p>
 
       <Card>
         <form onSubmit={add} className="flex flex-col gap-2">
@@ -106,19 +95,7 @@ export default function BacklogTab({ navigate }: { navigate: Navigate }) {
                 ))}
               </select>
             )}
-            <button type="button" onClick={() => setShowRemind((v) => !v)} className="rounded-full bg-bg px-3 py-1 font-extrabold text-muted">
-              {remind ? `⏰ ${formatReminder(remind)}` : "⏰ Remind me"}
-            </button>
           </div>
-          {showRemind && (
-            <ReminderPicker
-              value={remind}
-              onChange={(iso) => {
-                setRemind(iso);
-                setShowRemind(false);
-              }}
-            />
-          )}
         </form>
       </Card>
 
@@ -156,7 +133,6 @@ export default function BacklogTab({ navigate }: { navigate: Navigate }) {
           {items.map((t) => {
             const ci = catIndex(t.category_id);
             const cat = ci >= 0 ? categories[ci] : null;
-            const due = !!t.remind_at && Date.parse(t.remind_at) <= now;
             return (
               <li key={t.id} className="border-b border-line py-2 last:border-0">
                 <div className="flex items-center gap-2">
@@ -170,7 +146,6 @@ export default function BacklogTab({ navigate }: { navigate: Navigate }) {
                           {cat.name}
                         </span>
                       )}
-                      {t.remind_at && <span className={`font-extrabold ${due ? "text-high" : ""}`}>⏰ {formatReminder(t.remind_at)}</span>}
                     </div>
                   </div>
                   <button type="button" onClick={() => pick(t, todayISO())} className="shrink-0 rounded-full bg-accent px-3 py-1.5 text-xs font-extrabold text-accent-ink" aria-label={`Pick ${t.text} for today`}>
@@ -187,9 +162,6 @@ export default function BacklogTab({ navigate }: { navigate: Navigate }) {
                 {openRow === t.id && (
                   <div className="mt-2 flex flex-col gap-2">
                     <div className="flex flex-wrap gap-1.5">
-                      <button type="button" className={pill} onClick={() => pick(t, addDays(todayISO(), 1))}>
-                        Tomorrow
-                      </button>
                       <button type="button" className={pill} onClick={() => store.updateTask(t.id, { priority: cycle(PRIORITIES, t.priority) })}>
                         Priority: {PRIORITY_LABEL[t.priority]}
                       </button>
@@ -212,7 +184,6 @@ export default function BacklogTab({ navigate }: { navigate: Navigate }) {
                         Remove
                       </button>
                     </div>
-                    <ReminderPicker value={t.remind_at} onChange={(iso) => store.setReminder(t.id, iso)} />
                   </div>
                 )}
               </li>
