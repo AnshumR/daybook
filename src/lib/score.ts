@@ -3,6 +3,8 @@ import { isWordLevel, sentenceUsesWord, wordsForDate, type WordLevel } from "./w
 
 /** Word of the day counts towards the score from the day it was introduced. */
 export const WORD_START = "2026-10-27";
+/** The don't list counts from the day it was introduced. */
+export const DONTS_START = "2026-10-29";
 
 export type DayStats = {
   habitsDone: number;
@@ -12,6 +14,9 @@ export type DayStats = {
   /** Whether word of the day applies to this date, and whether it was done. */
   wordCounts: boolean;
   wordDone: boolean;
+  dontsTotal: number;
+  /** Don'ts marked "avoided". */
+  dontsKept: number;
   /** 0–100, rounded */
   score: number;
   /** True when anything was recorded for the day. */
@@ -40,11 +45,14 @@ export function dayStats(settings: Settings, day: Day | undefined, tasks: Task[]
   const d = date ?? day?.date;
   const wordCounts = wordEnabled(settings) && !!d && d >= WORD_START;
   const wordDone = wordCounts && wordDoneOn(day, d!);
-  const total = habitsTotal + tasksTotal + (wordCounts ? 1 : 0);
-  const done = habitsDone + tasksDone + (wordDone ? 1 : 0);
+  const donts = settings.donts ?? [];
+  const dontsTotal = d && d >= DONTS_START ? donts.length : 0;
+  const dontsKept = dontsTotal ? donts.filter((x) => day?.donts?.[x.id] === "kept").length : 0;
+  const total = habitsTotal + tasksTotal + (wordCounts ? 1 : 0) + dontsTotal;
+  const done = habitsDone + tasksDone + (wordDone ? 1 : 0) + dontsKept;
   const score = total === 0 ? 0 : Math.round((done / total) * 100);
   const logged = habitsDone > 0 || tasksTotal > 0 || wordDone || !!day?.note?.trim();
-  return { habitsDone, habitsTotal, tasksDone, tasksTotal, wordCounts, wordDone, score, logged };
+  return { habitsDone, habitsTotal, tasksDone, tasksTotal, wordCounts, wordDone, dontsTotal, dontsKept, score, logged };
 }
 
 /** Heatmap level 0–4. Days with nothing logged are level 0. */

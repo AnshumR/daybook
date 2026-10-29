@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { getStore, useData } from "@/lib/store";
 import { formatLong, todayISO } from "@/lib/dates";
 import { currentStreak, useTasksByDate } from "@/lib/derive";
-import { describePlanned, formatMinutes, plannedAt } from "@/lib/insights";
+import { describePlanned, formatClock, formatMinutes, plannedAt } from "@/lib/insights";
 import { overdueTasks } from "@/lib/reminders";
-import { dayReport } from "@/lib/report";
+import { dayReport, timerSeconds } from "@/lib/report";
 import { dayStats, wordDoneOn, wordEnabled, wordLevel } from "@/lib/score";
 import { partOfDay } from "@/lib/themes";
 import { PRIORITIES, PRIORITY_LABEL, PRIORITY_NAME, PRIORITY_RANK, type Priority, type Task } from "@/lib/types";
@@ -29,8 +29,10 @@ export default function DayTab({ date }: { date: string }) {
     <>
       <Greeting date={date} tasks={tasks} isToday={isToday} />
       {isToday && <ReminderBanner tasks={tasks} />}
+      <NowWorking tasks={tasks} />
       <PlanCard date={date} tasks={tasks} isToday={isToday} />
       <HabitsCard date={date} />
+      <DontsCard date={date} />
       {wordEnabled(data.settings) && <WordCard date={date} />}
       <ReflectionCard date={date} isToday={isToday} />
       <ReportCard date={date} tasks={tasks} />
@@ -56,8 +58,8 @@ function Greeting({ date, tasks, isToday }: { date: string; tasks: Task[]; isTod
       <div className="min-w-0">
         <h1 className="text-[28px] font-bold leading-tight">{title}</h1>
         <p className="mt-1 text-sm font-semibold text-muted">
-          {stats.habitsDone + stats.tasksDone + (stats.wordDone ? 1 : 0)} of{" "}
-          {stats.habitsTotal + stats.tasksTotal + (stats.wordCounts ? 1 : 0)} things done
+          {stats.habitsDone + stats.tasksDone + (stats.wordDone ? 1 : 0) + stats.dontsKept} of{" "}
+          {stats.habitsTotal + stats.tasksTotal + (stats.wordCounts ? 1 : 0) + stats.dontsTotal} things done
         </p>
         <p className="text-sm text-muted">{bits.join(" · ")}</p>
       </div>
@@ -85,6 +87,53 @@ function ReminderBanner({ tasks }: { tasks: Task[] }) {
   );
 }
 
+/** Live seconds for a running timer, ticking once a second. */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}
+
+function formatTimer(secs: number): string {
+  const s = Math.floor(secs);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${m}:${String(r).padStart(2, "0")}`;
+}
+
+function NowWorking({ tasks }: { tasks: Task[] }) {
+  const store = getStore();
+  const running = tasks.find((t) => t.running_since);
+  const now = useNow(!!running);
+  if (!running) return null;
+  return (
+    <div className="sticky top-16 z-10 flex items-center gap-3 rounded-[22px] bg-ink px-4 py-3 text-bg shadow-lg">
+      <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-bold opacity-75">Working on</p>
+        <p className="truncate font-extrabold">{running.text}</p>
+      </div>
+      <span className="font-display text-xl font-bold tabular-nums" aria-label="Time on this task">
+        {formatTimer(timerSeconds(running, now))}
+      </span>
+      <button type="button" onClick={() => store.pauseTask(running.id)} className="rounded-full bg-bg/15 px-3 py-1.5 text-sm font-extrabold">
+        Pause
+      </button>
+      <button type="button" onClick={() => store.setTaskDone(running.id, true)} className="rounded-full bg-accent px-3 py-1.5 text-sm font-extrabold text-accent-ink">
+        Finish
+      </button>
+    </div>
+  );
+}
+
 function PlanCard({ date, tasks, isToday }: { date: string; tasks: Task[]; isToday: boolean }) {
   const data = useData();
   const store = getStore();
@@ -92,20 +141,23 @@ function PlanCard({ date, tasks, isToday }: { date: string; tasks: Task[]; isTod
   const focus = useFocus();
   const focusName = categories.find((c) => c.id === focus)?.name;
   const [text, setText] = useState("");
-  const [category, setCategory] = useState<string>("");
   const [priority, setPriority] = useState<Priority>("medium");
   const [showDone, setShowDone] = useState(false);
+  const [openRow, setOpenRow] = useState<string | null>(null);
 
   const catIndex = (id: string | null) => categories.findIndex((c) => c.id === id);
-  const addCategory = focus ?? (category || categories[0]?.id || "");
+  const addCategory = focus ?? categories[0]?.id ?? "";
+  const byPosition = (a: Task, b: Task) => (a.position ?? 0) - (b.position ?? 0) || a.created_at.localeCompare(b.created_at);
 
   const { open, done } = useMemo(() => {
     const list = focus ? tasks.filter((t) => t.category_id === focus) : tasks;
-    const sorted = [...list].sort(
-      (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || a.created_at.localeCompare(b.created_at),
-    );
-    return { open: sorted.filter((t) => !t.done), done: sorted.filter((t) => t.done) };
+    return {
+      open: list.filter((t) => !t.done).sort(byPosition),
+      done: list.filter((t) => t.done).sort((a, b) => (a.done_at ?? "").localeCompare(b.done_at ?? "")),
+    };
   }, [tasks, focus]);
+
+  const openCount = (catId: string | null) => tasks.filter((t) => !t.done && (catId === null || t.category_id === catId)).length;
 
   function add(e: React.FormEvent) {
     e.preventDefault();
@@ -115,39 +167,91 @@ function PlanCard({ date, tasks, isToday }: { date: string; tasks: Task[]; isTod
     setText("");
   }
 
-  const cycle = <T,>(list: T[], current: T) => list[(list.indexOf(current) + 1) % list.length];
+  function move(id: string, dir: -1 | 1) {
+    const ids = open.map((t) => t.id);
+    const i = ids.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    store.reorderTasks(ids);
+  }
+
+  function sortByPriority() {
+    store.reorderTasks([...open].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || byPosition(a, b)).map((t) => t.id));
+  }
+
   const total = open.length + done.length;
 
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold">
-          {focusName ? `${focusName} focus` : isToday ? "Today’s plan" : "Plan"}
-        </h2>
-        {total > 0 && (
-          <span className="text-sm font-bold text-muted">
-            {done.length} of {total} done
-          </span>
-        )}
+      {categories.length > 0 && (
+        <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4" role="tablist" aria-label="Category">
+          {[{ id: null as string | null, name: "All" }, ...categories].map((c) => {
+            const active = (c.id ?? null) === focus;
+            const n = openCount(c.id);
+            return (
+              <button
+                key={c.id ?? "all"}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => store.updatePrefs({ focus: c.id })}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-extrabold ${
+                  active ? "bg-ink text-bg" : "bg-bg text-muted"
+                }`}
+              >
+                {c.name}
+                {n > 0 && <span className={`text-xs ${active ? "opacity-75" : ""}`}>{n}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold">{focusName ?? (isToday ? "Today’s plan" : "Plan")}</h2>
+        <div className="flex items-center gap-3">
+          {open.length > 1 && (
+            <button type="button" onClick={sortByPriority} className="text-xs font-extrabold text-accent">
+              Sort by priority
+            </button>
+          )}
+          {total > 0 && (
+            <span className="text-sm font-bold text-muted">
+              {done.length}/{total}
+            </span>
+          )}
+        </div>
       </div>
 
-      <ul className="flex flex-col">
+      <ol className="flex flex-col">
         {open.length === 0 && (
-          <li className="pb-3 text-muted">
-            {done.length ? "All done. Lovely work." : focusName ? `No ${focusName.toLowerCase()} tasks yet.` : "Nothing planned yet."}
+          <li className="pb-2 text-muted">
+            {done.length ? "All done here. Lovely work." : focusName ? `Nothing in ${focusName} yet.` : "Nothing planned yet."}
           </li>
         )}
-        {open.map((t) => (
-          <TaskRow key={t.id} task={t} showCategory={!focus} catIndex={catIndex(t.category_id)} cycle={cycle} />
+        {open.map((t, i) => (
+          <TaskRow
+            key={t.id}
+            task={t}
+            number={i + 1}
+            showCategory={!focus}
+            catIndex={catIndex(t.category_id)}
+            expanded={openRow === t.id}
+            onToggleMenu={() => setOpenRow((r) => (r === t.id ? null : t.id))}
+            onMove={(dir) => move(t.id, dir)}
+            first={i === 0}
+            last={i === open.length - 1}
+          />
         ))}
-      </ul>
+      </ol>
 
       <form onSubmit={add} className="mt-2">
         <div className="flex gap-2">
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={focusName ? `Add a ${focusName.toLowerCase()} task…` : "Add something for today…"}
+            placeholder={focusName ? `Add to ${focusName}…` : "Add something for today…"}
             aria-label="New task"
             className="min-w-0 flex-1 rounded-2xl border-[1.5px] border-dashed border-line bg-bg px-3 py-2.5 outline-none placeholder:text-muted focus:border-solid focus:border-accent"
           />
@@ -155,8 +259,8 @@ function PlanCard({ date, tasks, isToday }: { date: string; tasks: Task[]; isTod
             Add
           </button>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-          <div className="flex overflow-hidden rounded-full bg-bg" role="radiogroup" aria-label="Priority">
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <div className="flex shrink-0 overflow-hidden rounded-full bg-bg" role="radiogroup" aria-label="Priority">
             {PRIORITIES.map((p) => (
               <button
                 key={p}
@@ -172,36 +276,7 @@ function PlanCard({ date, tasks, isToday }: { date: string; tasks: Task[]; isTod
             ))}
           </div>
           {!focus && categories.length > 0 && (
-            <select
-              value={addCategory}
-              onChange={(e) => setCategory(e.target.value)}
-              aria-label="Category"
-              className="rounded-full bg-bg px-3 py-1 font-bold text-muted outline-none"
-            >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          )}
-          {categories.length > 0 && (
-            <label className="ml-auto flex items-center gap-1 text-muted">
-              <span className="font-semibold">Focus</span>
-              <select
-                value={focus ?? ""}
-                onChange={(e) => store.updatePrefs({ focus: e.target.value || null })}
-                aria-label="Focus"
-                className="rounded-full bg-bg px-3 py-1 font-extrabold text-ink outline-none"
-              >
-                <option value="">Everything</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <span className="text-xs text-muted">Adds to {categories.find((c) => c.id === addCategory)?.name}</span>
           )}
         </div>
       </form>
@@ -214,7 +289,7 @@ function PlanCard({ date, tasks, isToday }: { date: string; tasks: Task[]; isTod
           {showDone && (
             <ul className="mt-1 flex flex-col">
               {done.map((t) => (
-                <TaskRow key={t.id} task={t} showCategory={!focus} catIndex={catIndex(t.category_id)} cycle={cycle} />
+                <DoneRow key={t.id} task={t} />
               ))}
             </ul>
           )}
@@ -230,69 +305,161 @@ function priorityClass(p: Priority) {
 
 function TaskRow({
   task: t,
+  number,
   showCategory,
   catIndex,
-  cycle,
+  expanded,
+  onToggleMenu,
+  onMove,
+  first,
+  last,
 }: {
   task: Task;
+  number: number;
   showCategory: boolean;
   catIndex: number;
-  cycle: <T>(list: T[], current: T) => T;
+  expanded: boolean;
+  onToggleMenu: () => void;
+  onMove: (dir: -1 | 1) => void;
+  first: boolean;
+  last: boolean;
 }) {
   const data = useData();
   const store = getStore();
   const { categories } = data.settings;
   const cat = catIndex >= 0 ? categories[catIndex] : null;
-  const showMeta = (showCategory && categories.length > 0) || t.moved_count > 0;
+  const running = !!t.running_since;
+  const now = useNow(running);
+  const secs = timerSeconds(t, now);
+  const cycle = <T,>(list: T[], current: T) => list[(list.indexOf(current) + 1) % list.length];
+  const pill = "rounded-full bg-bg px-3 py-1.5 text-xs font-extrabold";
 
   return (
-    <li className="py-1.5">
-      <div className="flex items-center gap-3">
-        <Checkbox
-          checked={t.done}
-          onChange={() => store.updateTask(t.id, { done: !t.done })}
-          label={`Mark “${t.text}” as ${t.done ? "not done" : "done"}`}
-        />
+    <li className={`rounded-2xl px-1 py-1.5 ${running ? "bg-accent-soft" : ""}`}>
+      <div className="flex items-center gap-2.5">
+        <span className="w-5 shrink-0 text-center font-display text-base font-bold text-muted tabular-nums">{number}</span>
+        <Checkbox checked={false} onChange={() => store.setTaskDone(t.id, true)} label={`Mark “${t.text}” as done`} />
         <div className="min-w-0 flex-1">
-          <InlineText
-            value={t.text}
-            onCommit={(v) => store.updateTask(t.id, { text: v })}
-            strike={t.done}
-            ariaLabel="Task"
-            className="w-full text-[16px] font-semibold"
-          />
-          {showMeta && (
-            <div className="flex items-center gap-2 px-1 text-xs text-muted">
-              {showCategory && categories.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => store.updateTask(t.id, { category_id: cycle(categories, cat ?? categories[categories.length - 1]).id })}
-                  title="Tap to change category"
-                  className="flex items-center gap-1 font-bold"
-                >
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: cat ? tagColour(catIndex) : "var(--line)" }} />
-                  {cat?.name ?? "No category"}
-                </button>
-              )}
-              {t.moved_count > 0 && <span className="font-bold text-medium">moved {t.moved_count}×</span>}
-            </div>
-          )}
+          <InlineText value={t.text} onCommit={(v) => store.updateTask(t.id, { text: v })} ariaLabel="Task" className="w-full text-[16px] font-semibold" />
+          <div className="flex flex-wrap items-center gap-x-2 px-1 text-xs text-muted">
+            <span className={`rounded-full px-1.5 font-extrabold ${priorityClass(t.priority)}`}>{PRIORITY_LABEL[t.priority]}</span>
+            {showCategory && cat && (
+              <span className="flex items-center gap-1 font-bold">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: tagColour(catIndex) }} />
+                {cat.name}
+              </span>
+            )}
+            {t.recurring_id && <span className="font-bold">daily</span>}
+            {secs >= 1 && <span className="font-bold tabular-nums text-ink">{running ? formatTimer(secs) : formatMinutes(secs / 60)}</span>}
+            {t.moved_count > 0 && <span className="font-bold text-medium">moved {t.moved_count}×</span>}
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => store.updateTask(t.id, { priority: cycle(PRIORITIES, t.priority) })}
-          title={`${PRIORITY_NAME[t.priority]} (tap to change)`}
-          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-extrabold ${priorityClass(t.priority)}`}
-        >
-          {PRIORITY_LABEL[t.priority]}
-        </button>
-        <IconButton label="Delete task" onClick={() => store.deleteTask(t.id)} className="h-7 w-7">
-          <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" aria-hidden="true">
-            <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        {running ? (
+          <button type="button" onClick={() => store.pauseTask(t.id)} className="shrink-0 rounded-full bg-ink px-3 py-1.5 text-xs font-extrabold text-bg" aria-label={`Pause ${t.text}`}>
+            Pause
+          </button>
+        ) : (
+          <button type="button" onClick={() => store.startTask(t.id)} className="shrink-0 rounded-full bg-bg px-3 py-1.5 text-xs font-extrabold text-ink ring-[1.5px] ring-line ring-inset" aria-label={`${secs >= 1 ? "Resume" : "Start"} ${t.text}`}>
+            {secs >= 1 ? "Resume" : "Start"}
+          </button>
+        )}
+        <IconButton label={`More for ${t.text}`} onClick={onToggleMenu} className="h-8 w-8">
+          <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden="true">
+            <circle cx="4" cy="10" r="1.6" fill="currentColor" />
+            <circle cx="10" cy="10" r="1.6" fill="currentColor" />
+            <circle cx="16" cy="10" r="1.6" fill="currentColor" />
           </svg>
         </IconButton>
       </div>
+      {expanded && (
+        <div className="ml-8 mt-2 flex flex-wrap gap-1.5">
+          <button type="button" className={pill} onClick={() => onMove(-1)} disabled={first} aria-label="Move up">↑ Up</button>
+          <button type="button" className={pill} onClick={() => onMove(1)} disabled={last} aria-label="Move down">↓ Down</button>
+          <button type="button" className={pill} onClick={() => store.updateTask(t.id, { priority: cycle(PRIORITIES, t.priority) })}>
+            Priority: {PRIORITY_LABEL[t.priority]}
+          </button>
+          {categories.length > 0 && (
+            <button
+              type="button"
+              className={pill}
+              onClick={() => store.updateTask(t.id, { category_id: cycle(categories, cat ?? categories[categories.length - 1]).id })}
+            >
+              Category: {cat?.name ?? "None"}
+            </button>
+          )}
+          <button type="button" className={pill} onClick={() => store.carryToTomorrow(t.id)}>
+            Carry to tomorrow
+          </button>
+          <button type="button" className={`${pill} text-high`} onClick={() => store.deleteTask(t.id)}>
+            Remove
+          </button>
+        </div>
+      )}
     </li>
+  );
+}
+
+function DoneRow({ task: t }: { task: Task }) {
+  const store = getStore();
+  const secs = timerSeconds(t);
+  const info = [t.done_at ? `done ${formatClock(new Date(t.done_at))}` : "", secs >= 60 ? formatMinutes(secs / 60) : ""].filter(Boolean).join(" · ");
+  return (
+    <li className="flex items-center gap-2.5 px-1 py-1.5">
+      <span className="w-5 shrink-0" />
+      <Checkbox checked onChange={() => store.setTaskDone(t.id, false)} label={`Mark “${t.text}” as not done`} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate px-1 text-muted line-through">{t.text}</p>
+        {info && <p className="px-1 text-xs font-bold text-done">{info}</p>}
+      </div>
+      <IconButton label={`Remove ${t.text}`} onClick={() => store.deleteTask(t.id)} className="h-7 w-7">
+        <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" aria-hidden="true">
+          <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      </IconButton>
+    </li>
+  );
+}
+
+function DontsCard({ date }: { date: string }) {
+  const data = useData();
+  const store = getStore();
+  const donts = data.settings.donts ?? [];
+  const results = data.days[date]?.donts ?? {};
+  if (donts.length === 0) return null;
+  const kept = donts.filter((d) => results[d.id] === "kept").length;
+  return (
+    <Card title="Don’t list" action={<span className="text-sm font-bold text-muted">{kept} of {donts.length} avoided</span>}>
+      <ul className="flex flex-col gap-2">
+        {donts.map((d) => {
+          const r = results[d.id];
+          return (
+            <li key={d.id} className="flex items-center justify-between gap-3">
+              <span className={`min-w-0 flex-1 font-semibold ${r === "slipped" ? "text-high" : ""}`}>{d.name}</span>
+              <div className="flex shrink-0 overflow-hidden rounded-full bg-bg" role="radiogroup" aria-label={d.name}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={r === "kept"}
+                  onClick={() => store.setDont(date, d.id, r === "kept" ? null : "kept")}
+                  className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${r === "kept" ? "bg-done text-card" : "text-muted"}`}
+                >
+                  Avoided
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={r === "slipped"}
+                  onClick={() => store.setDont(date, d.id, r === "slipped" ? null : "slipped")}
+                  className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${r === "slipped" ? "bg-high text-card" : "text-muted"}`}
+                >
+                  Slipped
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }
 
@@ -312,6 +479,7 @@ function HabitsCard({ date }: { date: string }) {
           {habits.map((h) => {
             const done = day?.habits_done?.includes(h.id) ?? false;
             const streak = currentStreak(data.days, h.id, date);
+            const at = done ? day?.habit_times?.[h.id] : undefined;
             return (
               <button
                 key={h.id}
@@ -329,6 +497,7 @@ function HabitsCard({ date }: { date: string }) {
                   </svg>
                 )}
                 {h.name}
+                {at && <span className="text-xs opacity-85">· {formatClock(new Date(at))}</span>}
                 {streak > 1 && <span className={`text-xs ${done ? "opacity-85" : "text-muted"}`}>· {streak} days</span>}
               </button>
             );

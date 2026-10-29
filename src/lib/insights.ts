@@ -6,13 +6,14 @@ export type PlannedAt = { time: Date; nightBefore: boolean };
 /**
  * When the day was planned: the earliest task written for it, either on the day
  * itself or from midday the day before ("planned the night before").
- * Carried-over tasks don't count.
+ * Carried-over and every-day tasks don't count.
  */
 export function plannedAt(tasksForDate: Task[], date: string): PlannedAt | null {
   const prev = addDays(date, -1);
   let best: Date | null = null;
   for (const t of tasksForDate) {
-    if (t.moved_count > 0) continue;
+    // Carried-over and automatic every-day tasks aren't planning.
+    if (t.moved_count > 0 || t.recurring_id) continue;
     const c = new Date(t.created_at);
     if (Number.isNaN(c.getTime())) continue;
     const cd = toISO(c);

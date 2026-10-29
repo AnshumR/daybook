@@ -11,12 +11,25 @@ export type Prefs = {
   wordLevel?: string;
 };
 
+/** A task that is added to the plan automatically every day. */
+export type RecurringItem = {
+  id: string;
+  text: string;
+  category_id: string | null;
+  priority: Priority;
+};
+
 export type Settings = {
   habits: Item[];
   categories: Item[];
   areas: Item[];
   prefs: Prefs;
+  recurring: RecurringItem[];
+  /** Things to avoid (movies, ordering food…). */
+  donts: Item[];
 };
+
+export type DontResult = "kept" | "slipped";
 
 export type Priority = "high" | "medium" | "low";
 export type Timeframe = "month" | "year" | "long";
@@ -32,6 +45,12 @@ export type Day = {
   app_seconds?: number;
   /** Phone screen time typed in by the user, in minutes. */
   screen_minutes?: number | null;
+  /** Habit id → ISO time it was ticked. */
+  habit_times?: Record<string, string>;
+  /** Don't-list id → avoided or slipped. */
+  donts?: Record<string, DontResult>;
+  /** Today's every-day tasks have been added. */
+  recurring_added?: boolean;
 };
 
 export type DayTextField = "note" | "word_sentence" | "went_well" | "improve";
@@ -45,6 +64,17 @@ export type Task = {
   done: boolean;
   moved_count: number;
   created_at: string;
+  /** Manual order within the day (lower first). */
+  position?: number | null;
+  /** Set when the task came from an every-day template. */
+  recurring_id?: string | null;
+  done_at?: string | null;
+  /** First time the timer was started. */
+  started_at?: string | null;
+  /** Set while the timer is running. */
+  running_since?: string | null;
+  /** Time on the timer so far, excluding the current run. */
+  elapsed_seconds?: number;
 };
 
 export type Goal = {

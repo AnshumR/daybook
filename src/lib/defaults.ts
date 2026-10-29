@@ -10,10 +10,10 @@ export const DEFAULT_SETTINGS: Settings = {
   ],
   categories: [
     { id: "c_office", name: "Office" },
-    { id: "c_writing", name: "Writing" },
-    { id: "c_learning", name: "Learning" },
+    { id: "c_exercise", name: "Exercise" },
+    { id: "c_creative", name: "Painting & video" },
+    { id: "c_coding", name: "Coding" },
     { id: "c_personal", name: "Personal" },
-    { id: "c_admin", name: "Admin" },
   ],
   areas: [
     { id: "a_career", name: "Career" },
@@ -23,4 +23,18 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: "a_personal", name: "Personal" },
   ],
   prefs: {},
+  recurring: [
+    { id: "r_dsm", text: "DSM", category_id: "c_office", priority: "high" },
+    { id: "r_silk", text: "Aerial silk", category_id: "c_exercise", priority: "medium" },
+    { id: "r_yoga", text: "Yoga", category_id: "c_exercise", priority: "medium" },
+    { id: "r_aerial_video", text: "Learn from aerial videos", category_id: "c_exercise", priority: "low" },
+    { id: "r_dance", text: "Dance practice", category_id: "c_exercise", priority: "medium" },
+    { id: "r_python", text: "Python practice", category_id: "c_coding", priority: "medium" },
+    { id: "r_learning", text: "Learning (course or reading)", category_id: "c_coding", priority: "low" },
+  ],
+  donts: [
+    { id: "d_movies", name: "Watching movies" },
+    { id: "d_bed", name: "Sitting on the bed in the day" },
+    { id: "d_food", name: "Ordering food" },
+  ],
 };

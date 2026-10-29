@@ -9,7 +9,7 @@ import { dayStats, wordEnabled, wordLevel } from "@/lib/score";
 import { DEFAULT_MODE, DEFAULT_THEME, isMode, isThemeId, THEME_IDS, THEMES, type Mode } from "@/lib/themes";
 import { WORD_LEVELS, wordForDate } from "@/lib/words";
 import { formatClock, plannedAt } from "@/lib/insights";
-import { PRIORITY_LABEL, TIMEFRAME_LABEL, type Item, type Task } from "@/lib/types";
+import { PRIORITIES, PRIORITY_LABEL, TIMEFRAME_LABEL, type Item, type Priority, type RecurringItem, type Task } from "@/lib/types";
 import { Card, IconButton, Icons, InlineText } from "./ui";
 
 export default function SetupTab() {
@@ -18,6 +18,16 @@ export default function SetupTab() {
     <>
       <AppearanceCard />
       <FeaturesCard />
+      <RecurringEditor />
+      <ListEditor
+        title="Don’t list"
+        hint="Things to avoid. Mark each one Avoided or Slipped every day."
+        field="donts"
+        prefix="d"
+        placeholder="e.g. Ordering food"
+        items={data.settings.donts ?? []}
+        removeWarning="Remove this from your don’t list?"
+      />
       <ListEditor
         title="Habits"
         hint="Your daily routine. Renaming keeps all past ticks."
@@ -62,7 +72,7 @@ function ListEditor({
 }: {
   title: string;
   hint: string;
-  field: "habits" | "categories" | "areas";
+  field: "habits" | "categories" | "areas" | "donts";
   prefix: string;
   placeholder: string;
   items: Item[];
@@ -433,6 +443,111 @@ function FeaturesCard() {
           </button>
         )}
       </div>
+    </Card>
+  );
+}
+
+function RecurringEditor() {
+  const data = useData();
+  const store = getStore();
+  const items = data.settings.recurring ?? [];
+  const { categories } = data.settings;
+  const [text, setText] = useState("");
+  const [category, setCategory] = useState("");
+  const [priority, setPriority] = useState<Priority>("medium");
+  const save = (next: RecurringItem[]) => store.updateSettings({ recurring: next });
+  const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "No category";
+  const cycle = <T,>(list: T[], current: T) => list[(list.indexOf(current) + 1) % list.length];
+
+  function add(e: React.FormEvent) {
+    e.preventDefault();
+    const t = text.trim();
+    if (!t) return;
+    const item: RecurringItem = { id: shortId("r"), text: t, category_id: category || categories[0]?.id || null, priority };
+    save([...items, item]);
+    // Today's list was already made: add the new one now too.
+    const today = todayISO();
+    if (data.days[today]?.recurring_added) store.addTask(today, item.text, item.category_id, item.priority, item.id);
+    setText("");
+  }
+
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= items.length) return;
+    const next = [...items];
+    [next[i], next[j]] = [next[j], next[i]];
+    save(next);
+  };
+
+  return (
+    <Card title="Every-day tasks">
+      <p className="-mt-2 mb-3 text-sm text-muted">Added to your plan automatically each morning, like DSM or yoga. Changes apply from tomorrow.</p>
+      <ul className="flex flex-col">
+        {items.map((r, i) => (
+          <li key={r.id} className="flex items-center gap-1 border-b border-line py-1.5 last:border-0">
+            <div className="min-w-0 flex-1">
+              <InlineText
+                value={r.text}
+                onCommit={(v) => save(items.map((x) => (x.id === r.id ? { ...x, text: v } : x)))}
+                ariaLabel={`Rename ${r.text}`}
+                className="w-full"
+              />
+              <div className="flex gap-2 px-1 text-xs font-bold text-muted">
+                <button type="button" onClick={() => save(items.map((x) => (x.id === r.id && categories.length ? { ...x, category_id: cycle(categories.map((c) => c.id), x.category_id ?? categories[categories.length - 1].id) } : x)))}>
+                  {catName(r.category_id)}
+                </button>
+                <button type="button" onClick={() => save(items.map((x) => (x.id === r.id ? { ...x, priority: cycle(PRIORITIES, x.priority) } : x)))}>
+                  {PRIORITY_LABEL[r.priority]}
+                </button>
+              </div>
+            </div>
+            <IconButton label="Move up" onClick={() => move(i, -1)} disabled={i === 0}>
+              {Icons.up}
+            </IconButton>
+            <IconButton label="Move down" onClick={() => move(i, 1)} disabled={i === items.length - 1}>
+              {Icons.down}
+            </IconButton>
+            <IconButton
+              label={`Remove ${r.text}`}
+              onClick={() => {
+                if (confirm("Stop adding this every day? Past days keep their record.")) save(items.filter((x) => x.id !== r.id));
+              }}
+              className="hover:text-high"
+            >
+              {Icons.trash}
+            </IconButton>
+          </li>
+        ))}
+        {items.length === 0 && <li className="py-2 text-muted">None yet.</li>}
+      </ul>
+      <form onSubmit={add} className="mt-3 flex flex-col gap-2">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="e.g. DSM, Aerial silk, Python practice"
+          aria-label="New every-day task"
+          className="rounded-xl border border-line bg-bg px-3 py-2 outline-none focus:border-accent"
+        />
+        <div className="flex gap-2">
+          <select value={category || categories[0]?.id || ""} onChange={(e) => setCategory(e.target.value)} aria-label="Category" className="min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 py-2">
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <select value={priority} onChange={(e) => setPriority(e.target.value as Priority)} aria-label="Priority" className="rounded-xl border border-line bg-bg px-3 py-2">
+            {PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {PRIORITY_LABEL[p]}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className="shrink-0 rounded-xl bg-accent px-4 py-2 font-bold text-accent-ink">
+            Add
+          </button>
+        </div>
+      </form>
     </Card>
   );
 }

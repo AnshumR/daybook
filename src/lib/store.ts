@@ -5,8 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "./supabase/client";
 import { DEFAULT_SETTINGS } from "./defaults";
 import { uuid } from "./ids";
-import { todayISO } from "./dates";
-import type { Day, DayTextField, Goal, MonthNote, Prefs, Priority, Settings, Task, YearNote } from "./types";
+import { addDays, todayISO } from "./dates";
+import type { Day, DayTextField, DontResult, Goal, MonthNote, Prefs, Priority, Settings, Task, YearNote } from "./types";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -81,7 +81,7 @@ class DaybookStore {
       const flush = () => {
         if (document.visibilityState === "hidden") this.flushDebounced();
         // Coming back on a new day: bring yesterday's unfinished tasks forward.
-        else this.carryOverToToday();
+        else this.startOfDay();
       };
       document.addEventListener("visibilitychange", flush);
       window.addEventListener("pagehide", () => this.flushDebounced());
@@ -133,6 +133,8 @@ class DaybookStore {
           categories: settingsRes.data.categories ?? [],
           areas: settingsRes.data.areas ?? [],
           prefs: settingsRes.data.prefs ?? {},
+          recurring: settingsRes.data.recurring ?? [],
+          donts: settingsRes.data.donts ?? [],
         };
       } else {
         // First visit: give the new user editable starter data.
@@ -149,11 +151,16 @@ class DaybookStore {
             { onConflict: "user_id", ignoreDuplicates: true },
           );
         if (error) throw error;
+        // Newer columns: best effort, so sign-up still works before every migration has run.
+        await this.sb
+          .from("settings")
+          .update({ recurring: DEFAULT_SETTINGS.recurring, donts: DEFAULT_SETTINGS.donts })
+          .eq("user_id", user.id);
       }
 
       const [days, tasks, goals, monthNotes, yearNotes] = await Promise.all([
         this.fetchAll<Day>("days", "*", "date"),
-        this.fetchAll<Task>("tasks", "id, date, text, category_id, priority, done, moved_count, created_at", "created_at"),
+        this.fetchAll<Task>("tasks", "*", "created_at"),
         this.fetchAll<Goal>(
           "goals",
           "id, title, area_id, timeframe, target_date, progress, next_step, done, created_at",
@@ -179,7 +186,7 @@ class DaybookStore {
         },
       };
       this.emit();
-      this.carryOverToToday();
+      this.startOfDay();
     } catch (e) {
       const message = e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : "Something went wrong";
       this.state = { phase: "error", message };
@@ -258,13 +265,30 @@ class DaybookStore {
   }
 
   toggleHabit(date: string, habitId: string) {
-    const current = this.data.days[date]?.habits_done ?? [];
-    const next = current.includes(habitId) ? current.filter((id) => id !== habitId) : [...current, habitId];
-    this.patchDay(date, { habits_done: next });
+    const day = this.data.days[date];
+    const current = day?.habits_done ?? [];
+    const ticking = !current.includes(habitId);
+    const next = ticking ? [...current, habitId] : current.filter((id) => id !== habitId);
+    const times = { ...(day?.habit_times ?? {}) };
+    if (ticking) times[habitId] = new Date().toISOString();
+    else delete times[habitId];
+    this.patchDay(date, { habits_done: next, habit_times: times });
     const userId = this.data.userId;
     this.save((sb) =>
-      sb.from("days").upsert({ user_id: userId, date, habits_done: next }, { onConflict: "user_id,date" }),
+      sb
+        .from("days")
+        .upsert({ user_id: userId, date, habits_done: next, habit_times: times }, { onConflict: "user_id,date" }),
     );
+  }
+
+  /** Mark a don't-list item as avoided or slipped (null clears it). */
+  setDont(date: string, dontId: string, result: DontResult | null) {
+    const donts = { ...(this.data.days[date]?.donts ?? {}) };
+    if (result) donts[dontId] = result;
+    else delete donts[dontId];
+    this.patchDay(date, { donts });
+    const userId = this.data.userId;
+    this.save((sb) => sb.from("days").upsert({ user_id: userId, date, donts }, { onConflict: "user_id,date" }));
   }
 
   setDayNote(date: string, note: string) {
@@ -314,9 +338,14 @@ class DaybookStore {
   // Tasks
   // ---------------------------------------------------------------------------
 
-  addTask(date: string, text: string, categoryId: string | null, priority: Priority) {
+  private nextPosition(date: string): number {
+    const positions = this.data.tasks.filter((t) => t.date === date).map((t) => t.position ?? 0);
+    return positions.length ? Math.max(...positions) + 1 : 1;
+  }
+
+  addTask(date: string, text: string, categoryId: string | null, priority: Priority, recurringId?: string) {
     const task: Task = {
-      id: uuid(),
+      id: recurringId ? recurringTaskId(recurringId, date) : uuid(),
       date,
       text,
       category_id: categoryId,
@@ -324,13 +353,99 @@ class DaybookStore {
       done: false,
       moved_count: 0,
       created_at: new Date().toISOString(),
+      position: this.nextPosition(date),
+      recurring_id: recurringId ?? null,
+      elapsed_seconds: 0,
     };
+    if (this.data.tasks.some((t) => t.id === task.id)) return;
     this.setData((d) => ({ ...d, tasks: [...d.tasks, task] }));
     const userId = this.data.userId;
-    this.save((sb) => sb.from("tasks").insert({ ...task, user_id: userId }));
+    // Every-day tasks have a fixed id per day, so a second device never adds a duplicate.
+    this.save((sb) =>
+      recurringId
+        ? sb.from("tasks").upsert({ ...task, user_id: userId }, { onConflict: "id", ignoreDuplicates: true })
+        : sb.from("tasks").insert({ ...task, user_id: userId }),
+    );
   }
 
-  updateTask(id: string, patch: Partial<Pick<Task, "text" | "category_id" | "priority" | "done" | "date" | "moved_count">>) {
+  // ---- Timer: start, pause, finish ------------------------------------------
+
+  private runningSeconds(t: Task, now = Date.now()): number {
+    return t.running_since ? Math.max(0, Math.round((now - Date.parse(t.running_since)) / 1000)) : 0;
+  }
+
+  /** Total seconds on a task's timer, including a run in progress. */
+  taskSeconds(t: Task, now = Date.now()): number {
+    return (t.elapsed_seconds ?? 0) + this.runningSeconds(t, now);
+  }
+
+  startTask(id: string) {
+    const now = new Date();
+    // Only one timer at a time: pause whatever else is running.
+    for (const t of this.data.tasks) if (t.running_since && t.id !== id) this.pauseTask(t.id);
+    const t = this.data.tasks.find((x) => x.id === id);
+    if (!t || t.running_since) return;
+    this.updateTask(id, {
+      running_since: now.toISOString(),
+      started_at: t.started_at ?? now.toISOString(),
+      ...(t.done ? { done: false, done_at: null } : {}),
+    });
+  }
+
+  pauseTask(id: string) {
+    const t = this.data.tasks.find((x) => x.id === id);
+    if (!t?.running_since) return;
+    this.updateTask(id, { elapsed_seconds: this.taskSeconds(t), running_since: null });
+  }
+
+  /** Tick a task done (stops its timer and records the time) or undo it. */
+  setTaskDone(id: string, done: boolean) {
+    const t = this.data.tasks.find((x) => x.id === id);
+    if (!t) return;
+    if (done) {
+      this.updateTask(id, {
+        done: true,
+        done_at: new Date().toISOString(),
+        ...(t.running_since ? { elapsed_seconds: this.taskSeconds(t), running_since: null } : {}),
+      });
+    } else {
+      this.updateTask(id, { done: false, done_at: null });
+    }
+  }
+
+  // ---- Order ------------------------------------------------------------------
+
+  /** Save a new order for these tasks (first = 1). */
+  reorderTasks(orderedIds: string[]) {
+    const current = new Map(this.data.tasks.map((t) => [t.id, t.position ?? 0]));
+    const slots = orderedIds.map((id) => current.get(id) ?? 0).sort((a, b) => a - b);
+    // Reuse the same position values so tasks outside this list keep their place.
+    const unique = new Set(slots).size === slots.length;
+    orderedIds.forEach((id, i) => {
+      const position = unique ? slots[i] : i + 1;
+      if (current.get(id) !== position) this.updateTask(id, { position });
+    });
+  }
+
+  updateTask(
+    id: string,
+    patch: Partial<
+      Pick<
+        Task,
+        | "text"
+        | "category_id"
+        | "priority"
+        | "done"
+        | "date"
+        | "moved_count"
+        | "position"
+        | "done_at"
+        | "started_at"
+        | "running_since"
+        | "elapsed_seconds"
+      >
+    >,
+  ) {
     this.setData((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
     this.save((sb) => sb.from("tasks").update(patch).eq("id", id));
   }
@@ -345,12 +460,45 @@ class DaybookStore {
     for (const t of tasks) this.updateTask(t.id, { date: toDate, moved_count: t.moved_count + 1 });
   }
 
-  /** Unfinished tasks from earlier days spill over into today automatically. */
+  /** Move one task to the next day. */
+  carryToTomorrow(id: string) {
+    const t = this.data.tasks.find((x) => x.id === id);
+    if (!t) return;
+    if (t.running_since) this.pauseTask(id);
+    this.updateTask(id, { date: addDays(t.date, 1), moved_count: t.moved_count + 1 });
+  }
+
+  /** Runs when the app opens or comes back on a new day. */
+  startOfDay() {
+    this.carryOverToToday();
+    this.addRecurringForToday();
+  }
+
+  /**
+   * Unfinished one-off tasks from earlier days spill over into today.
+   * Every-day tasks don't: a missed DSM stays missed on its own day.
+   */
   carryOverToToday() {
     if (this.state.phase !== "ready") return;
     const today = todayISO();
-    const stale = this.data.tasks.filter((t) => !t.done && t.date < today).map((t) => t.id);
+    const stale = this.data.tasks.filter((t) => !t.done && t.date < today && !t.recurring_id).map((t) => t.id);
     if (stale.length) this.moveTasks(stale, today);
+  }
+
+  /** Adds today's every-day tasks once (a task removed today stays removed). */
+  addRecurringForToday() {
+    if (this.state.phase !== "ready") return;
+    const today = todayISO();
+    if (this.data.days[today]?.recurring_added) return;
+    const templates = this.data.settings.recurring ?? [];
+    if (templates.length === 0) return;
+    for (const r of templates) this.addTask(today, r.text, r.category_id, r.priority, r.id);
+    this.patchDay(today, { recurring_added: true });
+    const userId = this.data.userId;
+    this.save(
+      (sb) => sb.from("days").upsert({ user_id: userId, date: today, recurring_added: true }, { onConflict: "user_id,date" }),
+      true,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -446,6 +594,21 @@ class DaybookStore {
     window.location.href = "/login?deleted=1";
     return null;
   }
+}
+
+/** Same id every time for an every-day task on a given date. */
+function recurringTaskId(recurringId: string, date: string): string {
+  const input = `${recurringId}|${date}`;
+  let hex = "";
+  for (let seed = 0; seed < 4; seed++) {
+    let h = 0x811c9dc5 ^ (seed * 0x9e3779b9);
+    for (let i = 0; i < input.length; i++) {
+      h ^= input.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    hex += (h >>> 0).toString(16).padStart(8, "0");
+  }
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
 function firstName(meta: Record<string, unknown> | undefined, email: string | undefined): string {

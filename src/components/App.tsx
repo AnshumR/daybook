@@ -185,8 +185,11 @@ const TAB_ICONS: Record<Tab, React.ReactNode> = {
 
 function headerTitle(tab: "day" | "week" | "month" | "year", date: string): string {
   switch (tab) {
-    case "day":
-      return formatLong(date);
+    case "day": {
+      // Drop the year when it's this year, so the date fits on a phone.
+      const long = formatLong(date);
+      return date.slice(0, 4) === todayISO().slice(0, 4) ? long.replace(/ \d{4}$/, "") : long;
+    }
     case "week": {
       const start = startOfWeek(date);
       return `${formatShort(start)} – ${formatShort(addDays(start, 6))}`;
