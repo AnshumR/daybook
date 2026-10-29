@@ -443,6 +443,7 @@ class DaybookStore {
         | "started_at"
         | "running_since"
         | "elapsed_seconds"
+        | "remind_at"
       >
     >,
   ) {
@@ -465,7 +466,45 @@ class DaybookStore {
     const t = this.data.tasks.find((x) => x.id === id);
     if (!t) return;
     if (t.running_since) this.pauseTask(id);
-    this.updateTask(id, { date: addDays(t.date, 1), moved_count: t.moved_count + 1 });
+    this.updateTask(id, { date: addDays(t.date ?? todayISO(), 1), moved_count: t.moved_count + 1 });
+  }
+
+  // ---- Backlog and reminders ----------------------------------------------------
+
+  /** A task with no day yet. */
+  addBacklogTask(text: string, categoryId: string | null, priority: Priority, remindAt: string | null) {
+    const task: Task = {
+      id: uuid(),
+      date: null,
+      text,
+      category_id: categoryId,
+      priority,
+      done: false,
+      moved_count: 0,
+      created_at: new Date().toISOString(),
+      position: null,
+      recurring_id: null,
+      elapsed_seconds: 0,
+      remind_at: remindAt,
+    };
+    this.setData((d) => ({ ...d, tasks: [...d.tasks, task] }));
+    const userId = this.data.userId;
+    this.save((sb) => sb.from("tasks").insert({ ...task, user_id: userId }));
+  }
+
+  /** Pick a task (from the backlog or another day) for a date, at the end of that day's list. */
+  pickForDay(id: string, date: string = todayISO()) {
+    this.updateTask(id, { date, position: this.nextPosition(date) });
+  }
+
+  sendToBacklog(id: string) {
+    const t = this.data.tasks.find((x) => x.id === id);
+    if (t?.running_since) this.pauseTask(id);
+    this.updateTask(id, { date: null, position: null });
+  }
+
+  setReminder(id: string, remindAt: string | null) {
+    this.updateTask(id, { remind_at: remindAt });
   }
 
   /** Runs when the app opens or comes back on a new day. */
@@ -481,7 +520,9 @@ class DaybookStore {
   carryOverToToday() {
     if (this.state.phase !== "ready") return;
     const today = todayISO();
-    const stale = this.data.tasks.filter((t) => !t.done && t.date < today && !t.recurring_id).map((t) => t.id);
+    const stale = this.data.tasks
+      .filter((t) => !t.done && t.date !== null && t.date < today && !t.recurring_id)
+      .map((t) => t.id);
     if (stale.length) this.moveTasks(stale, today);
   }
 

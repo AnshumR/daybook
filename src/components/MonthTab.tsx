@@ -30,6 +30,11 @@ export default function MonthTab({ date, navigate }: { date: string; navigate: N
 
   return (
     <>
+      <div className="flex justify-end">
+        <button type="button" onClick={() => navigate("year", date)} className="rounded-full bg-card px-4 py-1.5 text-sm font-extrabold text-accent shadow-[0_2px_0_var(--line)]">
+          Year view →
+        </button>
+      </div>
       <div className="grid grid-cols-3 gap-2">
         <Stat label="Avg score" value={`${avg}%`} sub={`${logged.length} days logged`} />
         <Stat label="Full days" value={fullDays} sub="100% days" />

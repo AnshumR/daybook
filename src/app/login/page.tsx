@@ -10,7 +10,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("error")) setMessage("That sign-in link didn’t work. It may have expired – please try again.");
+    const error = params.get("error");
+    if (error === "private") setMessage("This Daybook is private. Your account doesn’t have access.");
+    else if (error) setMessage("That sign-in link didn’t work. It may have expired – please try again.");
     if (params.get("deleted")) setMessage("Your account and all your data have been deleted.");
   }, []);
 

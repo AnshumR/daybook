@@ -154,7 +154,7 @@ function ExportCard() {
 
   function exportDaily() {
     const tasksByDate = new Map<string, Task[]>();
-    for (const t of data.tasks) tasksByDate.set(t.date, [...(tasksByDate.get(t.date) ?? []), t]);
+    for (const t of data.tasks) if (t.date) tasksByDate.set(t.date, [...(tasksByDate.get(t.date) ?? []), t]);
     const dates = Array.from(new Set([...Object.keys(data.days), ...tasksByDate.keys()])).sort();
     const rows: (string | number)[][] = [
       ["Date", ...settings.habits.map((h) => h.name), "Habits done", "Habits total", "Tasks done", "Tasks total", "Day score %", "Word", "Word sentence", "Went well", "To improve", "Note", "Planned at", "Minutes in Daybook", "Screen time (min)"],
@@ -190,9 +190,9 @@ function ExportCard() {
   function exportTasks() {
     const rows: (string | number)[][] = [["Date", "Task", "Category", "Priority", "Done", "Times moved", "Created"]];
     [...data.tasks]
-      .sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at))
+      .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999") || a.created_at.localeCompare(b.created_at))
       .forEach((t) =>
-        rows.push([t.date, t.text, catName(t.category_id), PRIORITY_LABEL[t.priority], t.done ? "Yes" : "No", t.moved_count, t.created_at]),
+        rows.push([t.date ?? "Backlog", t.text, catName(t.category_id), PRIORITY_LABEL[t.priority], t.done ? "Yes" : "No", t.moved_count, t.created_at]),
       );
     downloadCSV(`daybook-tasks-${stamp}.csv`, rows);
   }

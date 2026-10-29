@@ -5,7 +5,9 @@ import { getStore, useData } from "@/lib/store";
 import { formatLong, todayISO } from "@/lib/dates";
 import { currentStreak, useTasksByDate } from "@/lib/derive";
 import { describePlanned, formatClock, formatMinutes, plannedAt } from "@/lib/insights";
-import { overdueTasks } from "@/lib/reminders";
+import { dueReminders, formatReminder, overdueTasks } from "@/lib/reminders";
+import ReminderPicker from "./ReminderPicker";
+import { useMinute } from "./BacklogTab";
 import { dayReport, timerSeconds } from "@/lib/report";
 import { dayStats, wordDoneOn, wordEnabled, wordLevel } from "@/lib/score";
 import { partOfDay } from "@/lib/themes";
@@ -28,6 +30,7 @@ export default function DayTab({ date }: { date: string }) {
   return (
     <>
       <Greeting date={date} tasks={tasks} isToday={isToday} />
+      {isToday && <DueReminders />}
       {isToday && <ReminderBanner tasks={tasks} />}
       <NowWorking tasks={tasks} />
       <PlanCard date={date} tasks={tasks} isToday={isToday} />
@@ -64,6 +67,45 @@ function Greeting({ date, tasks, isToday }: { date: string; tasks: Task[]; isTod
         <p className="text-sm text-muted">{bits.join(" · ")}</p>
       </div>
       <Ring value={stats.score} />
+    </div>
+  );
+}
+
+/** Reminders that are due now, from the backlog or any day. */
+function DueReminders() {
+  const data = useData();
+  const store = getStore();
+  const now = useMinute();
+  const due = dueReminders(data.tasks, new Date(now));
+  if (due.length === 0) return null;
+  const today = todayISO();
+  const btn = "rounded-full px-3 py-1.5 text-xs font-extrabold";
+  return (
+    <div className="flex flex-col gap-2 rounded-[22px] bg-medium-soft px-4 py-3">
+      <p className="font-extrabold text-medium">⏰ {due.length === 1 ? "Reminder" : `${due.length} reminders`}</p>
+      {due.map((t) => (
+        <div key={t.id} className="flex flex-wrap items-center gap-2">
+          <span className="min-w-0 flex-1 font-semibold">{t.text}</span>
+          {t.date !== today && (
+            <button
+              type="button"
+              className={`${btn} bg-accent text-accent-ink`}
+              onClick={() => {
+                store.pickForDay(t.id, today);
+                store.setReminder(t.id, null);
+              }}
+            >
+              Add to today
+            </button>
+          )}
+          <button type="button" className={`${btn} bg-card`} onClick={() => store.setReminder(t.id, new Date(Date.now() + 3600_000).toISOString())}>
+            Snooze 1h
+          </button>
+          <button type="button" className={`${btn} bg-card`} onClick={() => store.setReminder(t.id, null)}>
+            Done with reminder
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -352,6 +394,7 @@ function TaskRow({
             {t.recurring_id && <span className="font-bold">daily</span>}
             {secs >= 1 && <span className="font-bold tabular-nums text-ink">{running ? formatTimer(secs) : formatMinutes(secs / 60)}</span>}
             {t.moved_count > 0 && <span className="font-bold text-medium">moved {t.moved_count}×</span>}
+            {t.remind_at && <span className="font-bold">⏰ {formatReminder(t.remind_at)}</span>}
           </div>
         </div>
         {running ? (
@@ -390,9 +433,16 @@ function TaskRow({
           <button type="button" className={pill} onClick={() => store.carryToTomorrow(t.id)}>
             Carry to tomorrow
           </button>
+          <button type="button" className={pill} onClick={() => store.sendToBacklog(t.id)}>
+            Send to backlog
+          </button>
           <button type="button" className={`${pill} text-high`} onClick={() => store.deleteTask(t.id)}>
             Remove
           </button>
+          <div className="w-full">
+            <p className="mb-1 text-xs font-extrabold text-muted">Remind me</p>
+            <ReminderPicker value={t.remind_at} onChange={(iso) => store.setReminder(t.id, iso)} />
+          </div>
         </div>
       )}
     </li>

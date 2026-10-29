@@ -22,16 +22,21 @@ import YearTab from "./YearTab";
 import GoalsTab from "./GoalsTab";
 import SetupTab from "./SetupTab";
 import Background from "./Background";
+import BacklogTab from "./BacklogTab";
 
-export type Tab = "day" | "week" | "month" | "year" | "goals" | "setup";
+export type Tab = "day" | "backlog" | "week" | "month" | "year" | "goals" | "setup";
 const TABS: { id: Tab; label: string }[] = [
   { id: "day", label: "Today" },
+  { id: "backlog", label: "Backlog" },
   { id: "week", label: "Week" },
   { id: "month", label: "Month" },
   { id: "year", label: "Year" },
   { id: "goals", label: "Goals" },
   { id: "setup", label: "Setup" },
 ];
+
+/** The bottom bar; Year opens from the Month page. */
+const NAV_TABS = TABS.filter((t) => t.id !== "year");
 
 export type Navigate = (tab: Tab, date?: string) => void;
 
@@ -99,7 +104,7 @@ export default function App() {
           {dated ? (
             <DateNav tab={tab} date={date} today={today} setDate={setDate} />
           ) : (
-            <h1 className="flex-1 px-1 text-2xl font-bold">{tab === "goals" ? "Goals" : "Setup"}</h1>
+            <p className="flex-1 px-1 font-display text-lg font-bold">{tab === "goals" ? "Goals" : tab === "backlog" ? "Backlog" : "Setup"}</p>
           )}
           <SaveIndicator status={state.status} />
         </div>
@@ -110,6 +115,7 @@ export default function App() {
         {tab === "week" && <WeekTab date={date} navigate={navigate} />}
         {tab === "month" && <MonthTab date={date} navigate={navigate} />}
         {tab === "year" && <YearTab date={date} navigate={navigate} />}
+        {tab === "backlog" && <BacklogTab navigate={navigate} />}
         {tab === "goals" && <GoalsTab navigate={navigate} />}
         {tab === "setup" && <SetupTab />}
       </main>
@@ -119,7 +125,7 @@ export default function App() {
         className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-card/95 pb-safe backdrop-blur"
       >
         <div className="mx-auto grid max-w-[680px] grid-cols-6 px-1">
-          {TABS.map((t) => {
+          {NAV_TABS.map((t) => {
             const active = tab === t.id;
             return (
               <button
@@ -144,6 +150,12 @@ export default function App() {
 
 const iconProps = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
 const TAB_ICONS: Record<Tab, React.ReactNode> = {
+  backlog: (
+    <svg {...iconProps}>
+      <path d="M4 5h16M4 10h16M4 15h10M4 20h7" />
+      <path d="M18 15v6M15 18h6" />
+    </svg>
+  ),
   day: (
     <svg {...iconProps}>
       <circle cx="12" cy="12" r="4.5" />

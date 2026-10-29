@@ -57,7 +57,8 @@ export type DayTextField = "note" | "word_sentence" | "went_well" | "improve";
 
 export type Task = {
   id: string;
-  date: string;
+  /** null = in the backlog (not planned for a day yet). */
+  date: string | null;
   text: string;
   category_id: string | null;
   priority: Priority;
@@ -75,6 +76,8 @@ export type Task = {
   running_since?: string | null;
   /** Time on the timer so far, excluding the current run. */
   elapsed_seconds?: number;
+  /** When to remind about this task. */
+  remind_at?: string | null;
 };
 
 export type Goal = {

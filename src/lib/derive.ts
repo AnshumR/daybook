@@ -6,6 +6,7 @@ export function useTasksByDate(tasks: Task[]): Map<string, Task[]> {
   return useMemo(() => {
     const map = new Map<string, Task[]>();
     for (const t of tasks) {
+      if (!t.date) continue; // backlog
       const list = map.get(t.date);
       if (list) list.push(t);
       else map.set(t.date, [t]);

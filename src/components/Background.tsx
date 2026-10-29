@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { getStore, useData } from "@/lib/store";
 import { todayISO } from "@/lib/dates";
-import { overdueTasks } from "@/lib/reminders";
+import { dueReminders, overdueTasks } from "@/lib/reminders";
 import { applyTheme, DEFAULT_MODE, DEFAULT_THEME, isMode, isThemeId } from "@/lib/themes";
 import type { Task } from "@/lib/types";
 import { useFocus } from "./DayTab";
@@ -74,10 +74,15 @@ export default function Background() {
         sent = JSON.parse(localStorage.getItem(key) || "[]");
       } catch {}
       const fresh = overdueTasks(tasksRef.current, focusRef.current).filter((t) => !sent.includes(t.id));
-      if (fresh.length === 0) return;
+      const due = dueReminders(tasksRef.current).filter((t) => !sent.includes(`r:${t.id}:${t.remind_at}`));
+      if (fresh.length === 0 && due.length === 0) return;
       for (const t of fresh) void notify("Still waiting: " + t.text, "This task has been open for 2+ hours.", t.id);
+      for (const t of due) void notify("Reminder: " + t.text, "Open Daybook to add it to today or snooze.", `r:${t.id}`);
       try {
-        localStorage.setItem(key, JSON.stringify([...sent, ...fresh.map((t) => t.id)]));
+        localStorage.setItem(
+          key,
+          JSON.stringify([...sent, ...fresh.map((t) => t.id), ...due.map((t) => `r:${t.id}:${t.remind_at}`)]),
+        );
       } catch {}
     };
     check();
